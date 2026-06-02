@@ -119,30 +119,72 @@ Esca_df <- Esca_df |>
   mutate(`percentage_eutypa` = apply(Esca_df[,str_which(names(Esca_df), "Eutyp")], 1, function(z){sum(z, na.rm = T)/4})) 
 
 
-## ----.csv file----------------------------------------------------------------------------------------------------
+## Long term observations
+## We define two categories, 2004-2022 and 2012-2022 and we isolate plots (domains in this case) for which we have data for the whole period. Note that some plots have observations from 2001 to 2022 and are included in the group 2004-2022.
+## WARNING: THOSE PLOTS ARE NOT NECESSARILY IDENTICAL OVER THE YEARS;
+## THEY MAY HAVE CHANGED (E.G. PICKING A NEIGHBOURING ONE).
+Year_range <-  Esca_df$Year |> unique() |> sort()
+parcelle_range <- Esca_df$parcelle |> unique() |> sort() |>as.character() |>  as.numeric()
+group_year_lev <- c("2004-2022", "2012-2022")
+grp_years <- data.frame(plot =parcelle_range)
+for(i in 1:length(parcelle_range))
+{
+  curr_range_years <- Esca_df |> filter(parcelle == parcelle_range[i]) |> 
+    pull(Year) |> 
+    unique() |> 
+    sort()
+  
+  if(all(Year_range[Year_range >= 2012] %in% curr_range_years)){
+    grp_years$group_year[grp_years$plot == parcelle_range[i]] <- "2012-2022"
+  } else
+  {
+    grp_years$group_year[grp_years$plot == parcelle_range[i]] <- NA
+  }
+  if(all(Year_range[Year_range >= 2004] %in% curr_range_years)){
+    grp_years$group_year[grp_years$plot == parcelle_range[i]] <- "2004-2022"
+  }
+}
+grp_years <- grp_years |> mutate(across(everything(), factor))
+group_domains <- left_join(x = Esca_df , y = grp_years, 
+                                  by = c("parcelle"= "plot"))
 
+
+
+### Among all the plots, some were perfectly identical. Not only they were 
+### chosen in the same vineyard, but they were at the very same locations
+### This information has been gathered by A.-L. Fabre
 Stable_plots <- read_excel("~/mnt/Data-Work-CH/22_Plant_Production-CH/222.6_Mycologie_protected/Projets de recherche/2_Cultures spéciales/Esca/Papier Esca epidemiologie/ESCA brut 2001-2022.xlsx", sheet = 2, skip  = 1, guess_max = 10000)
 
-Stable_plots <- Stable_plots |> 
-  select(-c(Village, Cépage, `Stations Agrometeo`)) |> 
-  pivot_longer(cols = -c(parcelle, region, )) |> drop_na()|> 
-  mutate(value = NULL, parcelle = factor(parcelle)) |> 
-  mutate(group_year = factor(case_when(
-    name == "2001-2022" ~ "2004-2022",
+Stable_plots <- Stable_plots |>
+  select(-c(Village, Cépage, `Stations Agrometeo`)) |>
+  pivot_longer(cols = -c(parcelle, region, )) |> drop_na()|>
+  mutate(value = NULL, parcelle = factor(parcelle)) |>
+  mutate(stable_group = factor(case_when(
+    name == "2001-2022" ~ "2004-2022", # if we restict our attention to 2001-2022 only, we are left with a very few plots. We then include 2001 plots that are kept over the years in the group 2004-2022
     name == "2004-2022" ~ "2004-2022",
     name == "2001-2004     2012-2022" ~ "2012-2022",
     name == "2006-2022" ~ "2012-2022",
-    name == "2012-2022" ~ "2012-2022", 
-    .default = NA))) 
+    name == "2012-2022" ~ "2012-2022",
+    .default = NA)))
+
+left_join(x = group_domains |> select(parcelle, group_year),
+          y = Stable_plots, by = "parcelle") |> select(parcelle, group_year, stable_group) |>
+  distinct() |>
+  arrange(parcelle) #|>
+# View()
+
+
 
 write.table(x = Stable_plots, file = "data/Esca_CH_2001-2022_stable_plots.csv", sep = ",", fileEncoding = "latin1", dec = ".", row.names = F, na = "", quote = FALSE )
 
-Esca_df |>
+Esca_df <-
+  Esca_df |>
   filter(Year %in% c(2001, 2004)) |>
   select(- contains("percentage")) |>
   left_join(Esca_percentage) |>  # taking care of the 2001-2004 part separately from the rest (only percentages where collected)
   bind_rows(Esca_df |> filter(! Year %in% c(2001, 2004))) |>
-  left_join( y= Stable_plots |> select(parcelle, group_year ), by = "parcelle") |> 
+  left_join( y= Stable_plots |> select(parcelle, stable_group ) |> distinct(), by = "parcelle") |> 
+  left_join( y= group_domains |> select(parcelle, group_year ) |> distinct(), by = "parcelle") |> 
   rename(plot = parcelle,  variety = cepage, training_system = conduite) |> 
   rename_with(~ gsub("^Apoplexie_", "Apoplexy_", .x)) |>
   rename_with(~ gsub("^Symptomes_", "Symptoms_", .x)) |>
@@ -152,6 +194,8 @@ Esca_df |>
   mutate(distance_de_plantation = NULL) |> 
   relocate(Year, .after = training_system) |> 
   arrange(Year, plot) |> 
-  relocate(E, .before = N)|> 
+  relocate(E, .before = N)
+
+Esca_df |> 
   write.table(file = "data/Esca_CH_2001-2022.csv", sep = ",", fileEncoding = "latin1", dec = ".", row.names = F, na = "", quote = FALSE )
 
