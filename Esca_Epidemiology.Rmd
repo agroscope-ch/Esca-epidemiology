@@ -1,0 +1,1208 @@
+---
+title: "Analyse données Esca, 2001 - 2022"
+author: "Matthieu Wilhelm"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.width = 10, fig.height = 6)
+
+# --- Required packages ---
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(qgam)
+library(plotly)
+library(patchwork)
+library(knitr)
+library(kableExtra)
+library(sf)
+
+# --- Figure export setup ---
+dir.create("plots", showWarnings = FALSE)
+
+# Centralised figure saving function.
+# Change defaults here to modify all exported figures at once.
+save_plot <- function(plot, filename, 
+                      width = 10, height = 6, 
+                      ext = c("pdf", "png"),
+                      dpi = 300,
+                      dir = "plots") {
+  for (e in ext) {
+    fpath <- file.path(dir, paste0(filename, ".", e))
+    ggsave(fpath, plot = plot, width = width, height = height, dpi = dpi)
+  }
+  invisible(plot)
+}
+
+# Save interactive plotly widgets
+save_widget <- function(widget, filename, dir = "plots") {
+  fpath <- file.path(dir, paste0(filename, ".html"))
+  htmlwidgets::saveWidget(widget, file = fpath, selfcontained = TRUE)
+  invisible(widget)
+}
+conflicted::conflicts_prefer(base::as.factor)
+conflicted::conflicts_prefer(base::intersect)
+conflicted::conflicts_prefer(dplyr::filter)
+
+```
+
+## Preliminary analysis
+
+In this preliminary analysis, we will seek to gain a rough understanding of the initial characteristics of the data we are using. We will begin by loading the important packages and the data.
+
+The data has been loaded and preprocessed in a previous document. It consists of observations spanning from 2001 to 2022, at irregular intervals (2001, 2004, then biennially between 2004 and 2014, then annually from 2015 onwards). It is therefore sufficient to simply load the resulting file: 
+
+
+```{r load_data}
+Esca <- read.table(file = "data/Esca_CH_2001-2022.csv", header = TRUE, sep = ",", 
+                   dec = ".", na = "", stringsAsFactors = TRUE) |> 
+  mutate(variety = gsub(x = variety, pattern = "_", replacement = " "),
+         region = gsub(x = region, pattern = "_", replacement = " ")) |> 
+  mutate(`Grouped variety` = if_else(variety %in% c("chasselas", "gamay", "pinot noir"), 
+                                     true = variety, false = "Other variety")) |> 
+  mutate(SymptApo = percentage_symptoms + percentage_apoplexy)
+
+linewd <- 0.8
+```
+
+
+## Exploratory data analysis
+
+### Sample composition
+
+```{r table_sample}
+Esca$variety |> table() |> kable(col.names = c("Variety", "Sample size"))
+Esca$region |> table() |> kable(col.names = c("Region", "Sample size"))
+```
+
+```{r sample_by_year, fig.height=5}
+pl <- Esca |>  
+  ggplot(mapping = aes(x = factor(Year), fill = variety)) +
+  geom_bar(position = "dodge") +
+  xlab("Year") + ylab("Sample size") +
+  ggtitle("Number of samples", subtitle = "by year and variety") +
+  theme_minimal()
+print(pl)
+save_plot(pl, "samples_year_variety", height = 5)
+
+pl2 <- Esca |>  
+  ggplot(mapping = aes(x = factor(Year), fill = region)) +
+  geom_bar(position = "dodge") +
+  xlab("Year") + ylab("Sample size") +
+  ggtitle("Number of samples", subtitle = "by year and region") +
+  theme_minimal()
+print(pl2)
+save_plot(pl2, "samples_year_region", height = 5)
+```
+
+```{r proportions, fig.height=4.5}
+pl_variety <- Esca |> 
+  count(variety) |> 
+  mutate(prop = n / sum(n)) |> 
+  arrange(desc(prop)) |> 
+  mutate(variety = fct_reorder(variety, prop, .desc = TRUE)) |>
+  ggplot(aes(x = variety, y = prop, fill = variety)) +
+  geom_col() +
+  ylab("Proportion") +
+  ggtitle("Proportion of varieties in the data set") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels = scales::label_percent())
+print(pl_variety)
+save_plot(pl_variety, "prop_variety", height = 4.5)
+save_widget(ggplotly(pl_variety), "prop_variety")
+
+pl_region <- Esca |> 
+  count(region) |> 
+  mutate(prop = n / sum(n)) |> 
+  mutate(region = fct_reorder(region, prop, .desc = TRUE)) |>
+  ggplot(aes(x = region, y = prop, fill = region)) +
+  geom_col() +
+  ylab("Proportion") +
+  ggtitle("Proportion by region in the data set") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        legend.title = element_blank()) +
+  scale_y_continuous(labels = scales::label_percent())
+print(pl_region)
+save_plot(pl_region, "prop_region", height = 4.5)
+save_widget(ggplotly(pl_region), "prop_region")
+```
+
+### Temporal evolution
+
+One critical aspect is the temporal aspect. We are therefore initially interested in seeing whether we can visually observe a change in the proportion of vines affected.
+
+```{r evolution_apoplexy, eval=FALSE}
+year.br <- c(2001, 2004, seq(2006, 2022, by = 2))
+year.lab <- as.character(year.br)
+
+qfit <- qgam(percentage_apoplexy ~ s(Year), qu = .5,
+             data = Esca |> select(Year, percentage_apoplexy) |> drop_na())
+df.quant <- data.frame(Esca |> select(Year, percentage_apoplexy) |> drop_na(),
+                       Quant = predict(qfit))
+
+pl <- ggplot(Esca, aes(x = Year, y = percentage_apoplexy)) +
+  geom_boxplot(mapping = aes(group = Year), outlier.alpha = 0.3) +
+  geom_line(data = df.quant,
+            aes(x = as.integer(as.factor(Year)), y = Quant, col = "smooth median"),
+            linewidth = linewd) +
+  geom_smooth(aes(x = as.integer(as.factor(Year)), y = percentage_apoplexy,
+                  col = "smooth mean"), se = FALSE, linewidth = linewd) +
+  xlab("Year") + ylab("Apoplexy (%)") +
+  scale_x_continuous(breaks = year.br, labels = year.lab) +
+  scale_color_discrete("") +
+  ggtitle("Proportion (%) of vine stock with apoplexy") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl)
+save_plot(pl, "prop_evolution_apo")
+save_widget(ggplotly(pl), "prop_evolution_apo")
+```
+
+
+We consider the sum of symptoms and apoplexy, which are the main indicators of Esca expression:
+
+```{r evolution_symptapo}
+year.br = unique(Esca$Year) |> sort()
+year.lab <- as.character(year.br)
+
+qfit <- qgam(SymptApo ~ s(Year), qu = .5, 
+             data = Esca |> select(Year, SymptApo) |> drop_na(), control = list(progress = "none"))
+
+df.quant <- data.frame(Year = with(Esca, seq(min(Year), max(Year), by = 0.25)))
+df.quant <- cbind.data.frame(df.quant, Quant = predict(object = qfit, newdata = df.quant))
+
+pl <- ggplot(Esca, aes(x = Year, y = SymptApo)) + 
+  geom_boxplot(mapping = aes(group = Year), outlier.alpha = 0.3) +
+  geom_line(data = df.quant, 
+            aes(x = Year, y = Quant, col = "smooth median"),
+            linewidth = linewd) +
+  geom_smooth(aes(x = Year, y = SymptApo, col = "smooth mean"), 
+              se = FALSE, linewidth = linewd) +
+  xlab("Year") + ylab("Symptoms + Apoplexy (%)") +
+  scale_x_continuous(breaks = year.br, labels = year.lab) + 
+  scale_color_discrete("") +
+  ggtitle("Proportion (%) of vine stock with symptoms or apoplexy") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl)
+save_plot(pl, "prop_evolution_SympApo")
+save_widget(ggplotly(pl), "prop_evolution_SympApo")
+```
+
+<!-- Next, we look at the symptoms: -->
+
+```{r evolution_symptoms, eval=FALSE}
+qfit <- qgam(percentage_symptoms ~ s(Year), qu = .5,
+             data = Esca |> select(Year, percentage_symptoms) |> drop_na())
+df.quant <- data.frame(Esca |> select(Year, percentage_symptoms) |> drop_na(),
+                       Quant = predict(qfit))
+
+pl <- ggplot(Esca, aes(x = as.factor(Year), y = percentage_symptoms)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  geom_line(data = df.quant,
+            aes(x = as.integer(as.factor(Year)), y = Quant, col = "smooth median"),
+            linewidth = linewd) +
+  geom_smooth(aes(x = as.integer(as.factor(Year)), y = percentage_symptoms, col = "smooth mean"),
+              se = FALSE, linewidth = linewd) +
+  xlab("Year") + ylab("Symptoms (%)") +
+  scale_x_discrete(breaks = year.br, labels = year.lab) +
+  scale_color_discrete("") +
+  ggtitle("Proportion (%) of vine stock with symptoms") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl)
+save_plot(pl, "prop_evolution_sympt")
+save_widget(ggplotly(pl), "prop_evolution_sympt")
+```
+
+### Regional differences
+
+```{r evo_region_sympt, fig.height=7, eval=FALSE}
+dat_reg <- Esca |> 
+  select(Year, percentage_symptoms, region) |> 
+  drop_na() |> 
+  mutate(region = factor(region))
+
+qfit <- qgam(percentage_symptoms ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg)
+df.quant <- dat_reg |> mutate(Quant = predict(qfit))
+
+pl <- ggplot(dat_reg, aes(x = as.factor(Year), y = percentage_symptoms)) + 
+  geom_boxplot(outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  geom_line(data = df.quant, 
+            aes(x = as.integer(as.factor(Year)), y = Quant, col = "smooth median"),
+            linewidth = linewd) +
+  geom_smooth(aes(x = as.integer(as.factor(Year)), y = percentage_symptoms, col = "smooth mean"), 
+              se = FALSE, linewidth = linewd) +
+  xlab("Year") + ylab("Symptoms (%)") +
+  scale_x_discrete(breaks = year.br, labels = year.lab) + 
+  scale_color_discrete("") +
+  ggtitle("Proportion (%) of vine stock with symptoms — by region") +
+  coord_cartesian(ylim = c(0, 8)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl)
+save_plot(pl, "prop_evolution_sympt_regions", height = 7)
+save_widget(ggplotly(pl), "prop_evolution_sympt_regions")
+```
+
+```{r evo_region_symptapo, fig.height=7}
+# dat_reg2 <- Esca |> 
+#   select(Year, SymptApo, region) |> 
+#   drop_na() |> 
+#   mutate(region = factor(region))
+# 
+# qfit <- qgam(SymptApo ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg2)
+# df.quant <- dat_reg2 |> mutate(Quant = predict(qfit))
+# 
+# pl <- ggplot(dat_reg2, aes(x = as.factor(Year), y = SymptApo)) + 
+#   geom_boxplot(outlier.alpha = 0.3) +
+#   facet_wrap(~ region) +
+#   geom_line(data = df.quant, 
+#             aes(x = as.integer(as.factor(Year)), y = Quant, col = "smooth median"),
+#             linewidth = linewd) +
+#   geom_smooth(aes(x = as.integer(as.factor(Year)), y = SymptApo, col = "smooth mean"), 
+#               se = FALSE, linewidth = linewd) +
+#   xlab("Year") + ylab("Symptoms + Apoplexy (%)") +
+#   scale_x_discrete(breaks = year.br, labels = year.lab) + 
+#   scale_color_discrete("") +
+#   ggtitle("Proportion (%) of vine stock with symptoms or apoplexy — by region") +
+#   coord_cartesian(ylim = c(0, 10)) +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+# print(pl)
+
+
+dat_reg2 <- Esca |> 
+  select(Year, SymptApo, region) |> 
+  drop_na() |> 
+  mutate(region = factor(region))
+
+qfit <- qgam(SymptApo ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg2)
+df.quant <- expand.grid(region = unique(dat_reg2$region), Year = with(Esca, seq(min(Year), max(Year), by = 0.25)), control = list(progress = "none"))
+
+df.quant <- expand.grid(region = unique(dat_reg2$region), Year = with(Esca, seq(min(Year), max(Year), by = 0.25)))
+
+df.quant <- left_join(df.quant, Esca |> 
+  select(region, Year) |> 
+  group_by(region) |> 
+  summarise(minYear = min(Year)), by = "region") |> 
+  rowwise() |> 
+  filter(Year >= minYear) |> 
+  select(-minYear)
+
+
+df.quant <- cbind.data.frame(df.quant, Quant = predict(object = qfit, newdata = df.quant))
+# df.quant <- dat_reg2 |> mutate(Quant = predict(qfit))
+
+pl <- ggplot(dat_reg2, aes(x = Year, y = SymptApo)) + 
+  geom_boxplot(mapping = aes(group = Year), outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  geom_line(data = df.quant, 
+            aes(x = Year, y = Quant, col = "smooth median"),
+            linewidth = linewd) +
+  geom_smooth(aes(x = Year, y = SymptApo, col = "smooth mean"), 
+              se = FALSE, linewidth = linewd) +
+  xlab("Year") + ylab("Symptoms + Apoplexy (%)") +
+  scale_x_continuous(breaks = year.br, labels = year.lab) + 
+  scale_color_discrete("") +
+  ggtitle("Proportion (%) of vine stock with symptoms or apoplexy — by region") +
+  coord_cartesian(ylim = c(0, 10)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl)
+save_plot(pl, "prop_evolution_symptApo_regions", height = 7)
+save_widget(ggplotly(pl), "prop_evolution_symptApo_regions")
+```
+
+```{r evo_region_apo, fig.height=7, eval=FALSE}
+dat_reg3 <- Esca |> 
+  select(Year, percentage_apoplexy, region) |> 
+  drop_na() |> 
+  mutate(region = factor(region))
+
+qfit <- qgam(percentage_apoplexy ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg3)
+df.quant <- dat_reg3 |> mutate(Quant = predict(qfit))
+
+pl <- ggplot(dat_reg3, aes(x = as.factor(Year), y = percentage_apoplexy)) + 
+  geom_boxplot(outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  geom_line(data = df.quant, 
+            aes(x = as.integer(as.factor(Year)), y = Quant, col = "smooth median"),
+            linewidth = linewd) +
+  geom_smooth(aes(x = as.integer(as.factor(Year)), y = percentage_apoplexy, col = "smooth mean"), 
+              se = FALSE, linewidth = linewd) +
+  xlab("Year") + ylab("Apoplexy (%)") +
+  scale_x_discrete(breaks = year.br, labels = year.lab) + 
+  scale_color_discrete("") +
+  ggtitle("Proportion (%) of vine stock with apoplexy — by region") +
+  coord_cartesian(ylim = c(0, 8)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl)
+save_plot(pl, "prop_evolution_Apo_regions", height = 7)
+save_widget(ggplotly(pl), "prop_evolution_Apo_regions")
+```
+
+There does not appear to be a clear trend in either situation. However, there are significant regional disparities, which seem to indicate some form of spatial correlation.
+
+### Age, variety and training system
+
+```{r eda_age, fig.height=5, eval=FALSE}
+pl <- ggplot(Esca, aes(x = age, y = SymptApo, fill = region)) + 
+  geom_boxplot(outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  xlab("Age") + ylab("Symptoms + Apoplexy (%)") +
+  ggtitle("Effect of vineyard age") +
+  coord_cartesian(ylim = c(0, 15)) +
+  theme_minimal()
+print(pl)
+save_plot(pl, "boxplots_age_regions", height = 5)
+```
+
+```{r eda_training, fig.height=5, eval=FALSE}
+pl_training <- ggplot(Esca, aes(x = training_system, y = SymptApo, fill = region)) + 
+  geom_boxplot(outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  xlab("Training system") + ylab("Symptoms + Apoplexy (%)") +
+  ggtitle("Training system") +
+  coord_cartesian(ylim = c(0, 15)) +
+  theme_minimal()
+print(pl_training)
+save_plot(pl_training, "boxplots_training_regions", height = 5)
+```
+
+The training system does not seem to have an effect.
+
+```{r eda_variety, fig.height=6, eval=FALSE}
+pl_apo <- ggplot(Esca, aes(x = variety, y = percentage_apoplexy, fill = region)) + 
+  geom_boxplot(outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  xlab("Variety") + ylab("Apoplexy (%)") +
+  ggtitle("Apoplexy by variety and region") +
+  coord_cartesian(ylim = c(0, 10)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl_apo)
+save_plot(pl_apo, "boxplots_apo_regions")
+save_widget(ggplotly(pl_apo), "boxplots_apo_regions")
+
+pl_sympt <- ggplot(Esca, aes(x = variety, y = percentage_symptoms, fill = region)) + 
+  geom_boxplot(outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  xlab("Variety") + ylab("Symptoms (%)") +
+  ggtitle("Symptoms by variety and region") +
+  coord_cartesian(ylim = c(0, 10)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl_sympt)
+save_plot(pl_sympt, "boxplots_sympt_regions")
+save_widget(ggplotly(pl_sympt), "boxplots_sympt_regions")
+```
+
+In terms of grape varieties, sauvignon blanc appears more sensitive than other varieties. However, the small number of samples does not allow a decisive conclusion (< ~1% of the sample). Furthermore, this variety is only found in certain regions, so it is difficult to separate variety sensitivity from regional effects. In the following analysis and because of the very low number of observations, we will **exclude the plots with sauvignon blanc**. The plot also has a particular history that may explain a particular behavior.
+
+
+### Maps
+
+```{r maps, fig.height=10, results='asis'}
+maps_available <- tryCatch({
+  source("map_Esca_sampling_plots.R")
+  TRUE
+}, error = function(e) {
+  cat("\n\n*Maps not rendered: external map data unavailable.*\n\n")
+  FALSE
+})
+
+if (maps_available) {
+  # Ensure coordinates are in LV95
+  if (all(floor(log10(abs(c(Esca$E[!is.na(Esca$E)], Esca$N[!is.na(Esca$N)])))) == 5, na.rm = TRUE)) {
+    Esca <- Esca |> mutate(E_lv95 = E + 2e6, N_lv95 = N + 1e6)
+  } else {
+    Esca <- Esca |> mutate(E_lv95 = E, N_lv95 = N)
+  }
+  
+  # year_plot <- sort(unique(Esca$Year))
+  # year_plot <- year_plot[seq(3, length(year_plot), by = 3)]
+  year_plot <- c(2001, 2012, 2022)
+  for (yr in year_plot) {
+    Esca_plt <- Esca |> 
+      filter(Year == yr) |> 
+      select(plot, region, commune, Year, percentage_apoplexy, percentage_symptoms, SymptApo, E_lv95, N_lv95) |> 
+      rename(x = E_lv95, y = N_lv95)
+    pl_SymptApo <- maps_year_Zoom_Altitude(
+        data = Esca_plt |> rename(z = SymptApo),
+        lab_scale = "Symptoms + apoplexy (%)")
+    # pl_apo <- maps_year_Zoom_Altitude(
+    #   data = Esca_plt |> rename(z = percentage_apoplexy), 
+    #   lab_scale = "apoplexy (%)")
+    # pl_sympt <- maps_year_Zoom_Altitude(
+    #   data = Esca_plt |> rename(z = percentage_symptoms), 
+    #   lab_scale = "symptoms (%)")
+    
+    # combined <- pl_apo / pl_sympt + 
+    combined <- pl_SymptApo +
+          plot_annotation(title = paste0("Apoplexy and symptoms, ", yr))
+    print(combined)
+    save_plot(combined, paste0("map_", yr), width = 10, height = 10)
+  }
+  
+  # Median maps for stable plots
+  df_median2004 <- Esca |> 
+    filter(group_year == "2004-2022" & Year >= 2004) |> 
+    group_by(plot, region, E_lv95, N_lv95) |> 
+    summarise(MedianSymptApo = median(SymptApo), .groups = "drop") |> 
+    rename(x = E_lv95, y = N_lv95, z = MedianSymptApo)
+  
+  pl_med <- maps_year_Zoom(data = df_median2004, 
+                           lab_scale = "Median (%) 2004-2022", xupperbnd = 3) + 
+    ggtitle("Median Symptoms + Apoplexy", subtitle = "Stable plots: 2004-2022")
+  print(pl_med)
+  save_plot(pl_med, "map_median_2004_2022")
+}
+```
+
+
+## Stable plots
+
+Among the whole data set, some plots have been in the data set for a long period. We consider the subset for which we have complete data from 2004 to 2022.
+
+```{r stable_plots, fig.height=7}
+
+dat_stable <- Esca |>
+  filter(stable_group == "2004-2022", Year >= 2004) |>  
+  mutate(region = factor(region))
+
+
+qfit <- qgam(SymptApo ~ s(Year, region, bs = "fs"), qu = .5, data = dat_stable, control = list(progress = "none"))
+df.quant <- dat_stable |> mutate(Quant = predict(qfit))
+
+pl1 <- ggplot(dat_stable |> select(Year, SymptApo, region) |> drop_na(),
+              aes(x = Year, y = SymptApo)) +
+  geom_boxplot(mapping = aes(group = Year), outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  geom_line(data = df.quant,
+            aes(x = Year, y = Quant, col = "smooth median"),
+            linewidth = linewd) +
+  geom_smooth(aes(x = Year, y = SymptApo, col = "smooth mean"),
+              se = FALSE, linewidth = linewd) +
+  xlab("Year") + ylab("Symptoms + Apoplexy (%)") +
+  scale_x_continuous(breaks = year.br, labels = year.lab) +
+  scale_color_discrete(guide = "none") +
+  ggtitle("Stable plots 2004-2022") +
+  coord_cartesian(ylim = c(0, 10)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  
+print(pl1)
+
+dat_stable <- Esca |>
+  filter(!is.na(stable_group)) |>
+  filter(Year >= 2012) |> 
+  mutate(region = factor(region))
+
+
+qfit <- qgam(SymptApo ~ s(Year, region, bs = "fs"), qu = .5, data = dat_stable, control = list(progress = "none"))
+df.quant <- dat_stable |> mutate(Quant = predict(qfit))
+
+pl2 <- ggplot(dat_stable |> select(Year, SymptApo, region) |> drop_na(),
+              aes(x = Year, y = SymptApo)) +
+  geom_boxplot(mapping = aes(group = Year), outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  geom_line(data = df.quant,
+            aes(x = Year, y = Quant, col = "smooth median"),
+            linewidth = linewd) +
+  geom_smooth(aes(x = Year, y = SymptApo, col = "smooth mean"),
+              se = FALSE, linewidth = linewd) +
+  xlab("Year") + ylab("Symptoms + Apoplexy (%)") +
+  scale_x_continuous(breaks = year.br, labels = year.lab) +
+  scale_color_discrete("") +
+  ggtitle("Stable plots 2012-2022") +
+  coord_cartesian(ylim = c(0, 10)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+print(pl2)
+
+pl = pl1 + pl2  + 
+  plot_annotation(
+  title = "Proportion (%) of vine stock with symptoms or apoplexy — by region",
+  subtitle = 'Stable plots'
+  )
+pl
+
+save_plot(pl, "stable_plots_2022", height = 12)
+```
+
+
+## Correlation Analysis
+
+We compute the Spearman rank correlation between the response variable (Symptoms + Apoplexy %) and all climatic predictors. This measure captures monotonic associations.
+
+```{r corr_load_data, include=FALSE}
+source("esca_ml_config.R")
+source("esca_ml_pipeline.R")
+
+# Load full dataset with merged weather
+corr_data <- load_esca_data(config = config_full_dataset())
+```
+
+### Monthly variables
+
+```{r corr_monthly, fig.height=8, fig.width=10}
+library(corrplot)
+
+# Select monthly climate columns and the response
+month_labels <- month(3:10, label = TRUE, abbr = FALSE)
+monthly_vars <- c(
+  paste0("Temperature_", month_labels),
+  paste0("Humidity_", month_labels),
+  paste0("Precipitation_", month_labels),
+  paste0("Evapotranspiration_", month_labels),
+  paste0("Radiation_", month_labels),
+  paste0("Pressure_", month_labels),
+  paste0("VPD_", month_labels)
+)
+
+# Add contrast variable
+monthly_vars <- c(monthly_vars, "Contrast_MayJune_VPD")
+
+# Keep only columns that exist in the data
+monthly_vars <- intersect(monthly_vars, names(corr_data))
+monthly_cols <- c("SumSymptApo", monthly_vars)
+
+corr_monthly_df <- corr_data |>
+  select(all_of(monthly_cols)) |>
+  drop_na()
+
+corr_monthly_mat <- cor(corr_monthly_df, method = "spearman")
+
+# Extract only the correlations with the response variable
+corr_with_response <- corr_monthly_mat["SumSymptApo", -1, drop = FALSE]
+corr_sub <- corr_monthly_mat[c("SumSymptApo", monthly_vars), c("SumSymptApo", monthly_vars)]
+
+corrplot(corr_sub, method = "color", type = "lower",
+         tl.cex = 0.6, tl.col = "black", cl.cex = 0.7,
+         title = "Spearman Correlation — Monthly Climate Variables",
+         mar = c(0, 0, 2, 0))
+```
+
+```{r corr_monthly_bar, fig.height=5, fig.width=9}
+# Bar plot of correlations with the response
+corr_resp_df <- tibble(
+  Variable = colnames(corr_with_response),
+  Correlation = as.numeric(corr_with_response)
+) |>
+  mutate(Variable = fct_reorder(Variable, Correlation))
+
+pl_corr_monthly <- corr_resp_df |>
+  ggplot(aes(x = Variable, y = Correlation, fill = Correlation > 0)) +
+  geom_col(width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(values = c("TRUE" = "firebrick", "FALSE" = "steelblue"), guide = "none") +
+  labs(title = "Spearman Correlation with Symptoms + Apoplexy (%)",
+       subtitle = "Monthly climate variables",
+       x = NULL, y = "Spearman rho") +
+  theme_minimal(base_size = 6)
+print(pl_corr_monthly)
+save_plot(pl_corr_monthly, "corr_spearman_monthly", height = 5, width = 9)
+```
+
+### Seasonal variables
+
+```{r corr_seasonal, fig.height=5, fig.width=7}
+# Select seasonal aggregate columns + contrast variable
+seasonal_vars <- c("SeasVPD", "SeasTemp", "SeasPrecipitation", "SeasPressure",
+                   "SeasHumidity", "SeasRadiation", "SeasEvapotranspiration", 
+                   "Contrast_MayJune_VPD", "RU_nb")
+seasonal_vars <- intersect(seasonal_vars, names(corr_data))
+seasonal_cols <- c("SumSymptApo", seasonal_vars)
+
+corr_seasonal_df <- corr_data |>
+  select(all_of(seasonal_cols)) |>
+  drop_na()
+
+corr_seasonal_mat <- cor(corr_seasonal_df, method = "spearman")
+
+corrplot(corr_seasonal_mat, method = "color", type = "lower",
+         addCoef.col = "black", number.cex = 0.6,
+         tl.cex = 0.9, tl.col = "black", cl.cex = 0.8,
+         title = "Spearman Correlation — Seasonal Aggregate Variables",
+         mar = c(0, 0, 2, 0))
+```
+
+```{r corr_seasonal_bar, fig.height=3.5, fig.width=7}
+corr_seas_response <- corr_seasonal_mat["SumSymptApo", -1, drop = FALSE]
+
+corr_seas_df <- tibble(
+  Variable = colnames(corr_seas_response),
+  Correlation = as.numeric(corr_seas_response)
+) |>
+  mutate(Variable = fct_reorder(Variable, Correlation))
+
+pl_corr_seasonal <- corr_seas_df |>
+  ggplot(aes(x = Variable, y = Correlation, fill = Correlation > 0)) +
+  geom_col(width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(values = c("TRUE" = "firebrick", "FALSE" = "steelblue"), guide = "none") +
+  labs(title = "Spearman Correlation with Symptoms + Apoplexy (%)",
+       subtitle = "Seasonal aggregate variables",
+       x = NULL, y = "Spearman rho") +
+  theme_minimal(base_size = 11)
+print(pl_corr_seasonal)
+save_plot(pl_corr_seasonal, "corr_spearman_seasonal", height = 3.5, width = 7)
+```
+
+
+## FORD Variable Selection {.tabset}
+
+### Algorithm description
+
+**FORD** (Feature Ordering by Integrated $R^2$ Dependence is a model-agnostic variable selection algorithm that identifies statistically significant predictors without relying on any specific model or assumptions. See the reference for more details.  
+
+The method works by comparing each variable's conditional dependence with the response. Variables are selected sequentially: at each step, the variable most associated with the response is chosen, and the procedure stops when no remaining variable exceeds are positively associated in the sense of the integrated $R^2$ measure.
+
+**Reference**: Azkadia, M. and Roudaki, P. (2025). *A new measure of dependence: Integrated $R^2$*, .
+
+### Results
+
+```{r ford_results}
+ford_file <- "results/ford_variable_selection.csv"
+ford_file_seasonal <- "results/ford_variable_selection_seasonal.csv"
+
+ford_available <- file.exists(ford_file)
+ford_seasonal_available <- file.exists(ford_file_seasonal)
+
+if (!ford_available && !ford_seasonal_available) {
+  cat("*FORD results not available. Run `source('ford_analysis.R')` first.*\n")
+}
+```
+
+#### Monthly variables
+
+```{r ford_monthly_results}
+if (ford_available) {
+  ford_df <- read_csv(ford_file, show_col_types = FALSE)
+  cat("FORD selected **", nrow(ford_df), "** variables as statistically significant predictors (monthly mode):\n\n")
+  kable(ford_df, digits = 3,
+        caption = "Variables selected by FORD -- monthly climate variables (ordered by selection step)")
+} else {
+  cat("*Monthly FORD results not available.*\n")
+}
+```
+
+```{r ford_plot_monthly, fig.height=3.5}
+if (ford_available && exists("ford_df") && nrow(ford_df) > 0) {
+  pl_ford <- ford_df |>
+    mutate(Variable = fct_reorder(Variable, rank, .desc = TRUE)) |>
+    ggplot(aes(x = Variable, y = step_nu)) +
+    geom_col(fill = "steelblue", width = 0.6) +
+    coord_flip() +
+    labs(title = "FORD -- Selected Variables (Monthly)",
+         subtitle = "Test statistic at each selection step",
+         x = NULL, y = "Step nu (test statistic)") +
+    theme_minimal(base_size = 12)
+  print(pl_ford)
+  save_plot(pl_ford, "ford_variable_selection_monthly", height = 3.5)
+}
+```
+
+#### Seasonal variables
+
+```{r ford_seasonal_results}
+if (ford_seasonal_available) {
+  ford_df_seasonal <- read_csv(ford_file_seasonal, show_col_types = FALSE)
+  cat("FORD selected **", nrow(ford_df_seasonal), "** variable(s) as statistically significant predictors (seasonal mode):\n\n")
+  kable(ford_df_seasonal, digits = 3,
+        caption = "Variables selected by FORD -- seasonal aggregate variables (ordered by selection step)")
+} else {
+  cat("*Seasonal FORD results not available.*\n")
+}
+```
+
+```{r ford_plot_seasonal, fig.height=3}
+if (ford_seasonal_available && exists("ford_df_seasonal") && nrow(ford_df_seasonal) > 0) {
+  pl_ford_seas <- ford_df_seasonal |>
+    mutate(Variable = fct_reorder(Variable, rank, .desc = TRUE)) |>
+    ggplot(aes(x = Variable, y = step_nu)) +
+    geom_col(fill = "darkorange", width = 0.6) +
+    coord_flip() +
+    labs(title = "FORD -- Selected Variables (Seasonal)",
+         subtitle = "Test statistic at each selection step",
+         x = NULL, y = "Step nu (test statistic)") +
+    theme_minimal(base_size = 12)
+  print(pl_ford_seas)
+  save_plot(pl_ford_seas, "ford_variable_selection_seasonal", height = 3)
+}
+```
+
+#### Interpretation
+
+With **monthly** climate variables (~56 predictors), FORD identifies **VPD in July** and **Humidity in June** as the only two variables with a statistically significant signal beyond random noise.
+
+With **seasonal** aggregates (~7 predictors), FORD selects **SeasVPD** (seasonal mean of maximum daily VPD) as the sole significant variable. This is consistent: VPD in July is the dominant monthly contributor to the seasonal VPD aggregate.
+
+In both cases, VPD-related variables emerge as the strongest model-free signal, confirming the model-based importance rankings (see below) where VPD and humidity-related variables consistently appear among the top predictors.
+
+#### Testing the "cold-wet → hot-dry" transition hypothesis
+
+It has been suggested in the literature that Esca expression is linked to abrupt transitions from cold-wet to hot-dry conditions, particularly between May and June (Bortolami et al., *PNAS*, 2021). To challenge this hypothesis, we introduced a contrast variable:
+
+- **`Contrast_MayJune_VPD`** = VPD~June~ − VPD~May~ — captures the abrupt shift in atmospheric water demand between May and June. A large positive value indicates a rapid transition from cool/humid to hot/dry conditions.
+
+This variable is included in both the monthly and seasonal FORD analyses. If the hypothesis holds, FORD should detect this contrast as a significant predictor of Esca expression. The Spearman correlations in the preceding section provide an initial assessment of the strength and direction of this association.
+
+
+## Predictive Modelling
+
+### Pipeline overview
+
+A machine learning pipeline was developed to predict Esca disease expression (`SumSymptApo` = sum of symptoms and apoplexy percentages) from climatic and soil variables. The pipeline uses the `tidymodels` framework and proceeds as follows:
+
+1. **Data splitting**: 75% training / 25% test set (stratified by response)
+2. **Preprocessing**: Missing value filtering, near-zero variance removal, centering/scaling, dummy encoding of categorical variables
+3. **Models trained**:
+   - **Random Forest** (ranger) -- 27 hyperparameter combinations
+   - **Gradient Boosting** (XGBoost) -- 64 hyperparameter combinations  
+   - **LASSO regression** (glmnet) -- 20 penalty values
+4. **Tuning**: 10-fold cross-validation on the training set
+5. **Evaluation**: Final models refit on full training data and evaluated on held-out test set
+
+### Data sources
+
+Climate data comes from two networks:
+
+- **MeteoSwiss** (Federal Office of Meteorology): ~8 stations in the study area, complete temporal coverage 2001-2024. Measured variables: temperature, pressure, precipitation, radiation, humidity, evapotranspiration.
+- **Vitimeteo** (Agrometeo network, Agroscope): ~41 stations, closer to vineyard plots but with data gaps (no data before 2003, some station interruptions). Same variable types excluding pressure.
+
+The pipeline uses a **Vitimeteo-first with MeteoSwiss fallback** merging strategy: for each plot-year combination, Vitimeteo data is used if the nearest station is within 30 km and data is available; otherwise, MeteoSwiss data from the closest station is used.
+
+**VPD** (Vapour Pressure Deficit) is computed from hourly temperature and humidity data using the Tetens formula, then aggregated as the maximum daily VPD averaged over each month.
+
+All climate variables are aggregated **monthly** over the growing season (March-October), yielding 8 values per variable type. Additionally, **seasonal aggregates** (`SeasXX`) summarise the entire growing season into a single value per variable.
+
+**Soil data**: Available water reserve (`RU_nb`) from soil surveys.
+
+### Baseline
+
+The baseline predictor uses the **overall mean** of the training set as the prediction for all test observations. This represents the simplest possible prediction -- without any climatic or soil information -- and serves as the reference against which ML models are evaluated.
+
+### Results
+
+```{r ml_results}
+perf_file <- "results/combined_performance_summary.csv"
+if (!file.exists(perf_file)) {
+  cat("*ML results not available. Run `source('run_all_configurations.R')` first.*\n")
+  knitr::knit_exit()
+}
+
+perf_all <- read_csv(perf_file, show_col_types = FALSE)
+
+# Order configurations so that monthly appears in the left column and seasonal
+# in the right column when using facet_wrap(ncol = 2)
+# Interleave: monthly1, seasonal1, monthly2, seasonal2, ...
+monthly_configs <- sort(unique(perf_all$configuration[!grepl("Seasonal", perf_all$configuration)]))
+seasonal_configs <- sort(unique(perf_all$configuration[grepl("Seasonal", perf_all$configuration)]))
+config_order <- as.vector(rbind(monthly_configs, seasonal_configs))
+
+perf_all <- perf_all |>
+  mutate(configuration = factor(configuration, levels = config_order))
+
+baseline <- perf_all |> filter(model == "baseline_year_region")
+models <- perf_all |> filter(model != "baseline_year_region")
+
+baseline_wide <- baseline |>
+  pivot_wider(names_from = metric, values_from = value) |>
+  select(config_id, configuration, baseline_rmse = rmse, baseline_mae = mae)
+
+models_wide <- models |>
+  pivot_wider(names_from = metric, values_from = value) |>
+  left_join(baseline_wide |> select(-configuration), by = "config_id") |>
+  mutate(
+    configuration = factor(configuration, levels = config_order),
+    mae_vs_baseline = (mae - baseline_mae) / baseline_mae * 100,
+    rmse_vs_baseline = (rmse - baseline_rmse) / baseline_rmse * 100
+  )
+```
+
+#### Performance summary (MAE focus)
+
+The Mean Absolute Error (MAE) represents the average absolute difference between predicted and observed disease expression, in percentage points. A model with MAE = 1.5 means predictions are on average 1.5 percentage points away from the truth.
+
+```{r ml_table}
+summary_table <- models_wide |>
+  arrange(configuration, mae) |>
+  mutate(
+    mae_delta = paste0(ifelse(mae_vs_baseline > 0, "+", ""), round(mae_vs_baseline, 1), "%")
+  ) |>
+  select(Configuration = configuration, Model = model,
+         MAE = mae, `Delta MAE vs baseline` = mae_delta,
+         RMSE = rmse, `R2` = rsq) |>
+  left_join(
+    baseline_wide |> select(Configuration = configuration, `Baseline MAE` = baseline_mae),
+    by = "Configuration"
+  )
+
+kable(summary_table, digits = 3,
+      caption = "Test-set performance. Delta MAE shows % change relative to baseline (negative = better).")
+```
+
+#### MAE comparison plot
+
+```{r mae_comparison, fig.height=6}
+pl_mae <- models_wide |>
+  ggplot(aes(x = reorder(model, -mae), y = mae, fill = model)) +
+  geom_col(width = 0.6) +
+  geom_hline(data = baseline_wide,
+             aes(yintercept = baseline_mae),
+             linetype = "dashed", colour = "red", linewidth = 0.7) +
+  geom_text(data = baseline_wide,
+            aes(x = Inf, y = baseline_mae, 
+                label = paste0("baseline = ", round(baseline_mae, 2))),
+            inherit.aes = FALSE, hjust = 1.05, vjust = -0.5, colour = "red", size = 3) +
+  facet_wrap(~ configuration, scales = "free_y", ncol = 2) +
+  coord_flip() +
+  labs(title = "Test-Set MAE by Model and Configuration",
+       subtitle = "Dashed red line = baseline (overall mean prediction)",
+       x = NULL, y = "MAE (percentage points)") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none", strip.text = element_text(face = "bold"))
+print(pl_mae)
+save_plot(pl_mae, "ml_mae_comparison", width = 12, height = 7)
+```
+
+#### Relative performance vs baseline
+
+```{r delta_mae, fig.height=5.5}
+pl_delta <- models_wide |>
+  ggplot(aes(x = model, y = mae_vs_baseline, fill = model)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  facet_wrap(~ configuration, ncol = 2) +
+  coord_flip() +
+  scale_y_continuous(labels = function(x) paste0(round(x, 0), "%")) +
+  labs(title = "MAE: % change vs baseline (negative = better)",
+       x = NULL, y = "% change vs baseline") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none", strip.text = element_text(face = "bold"))
+print(pl_delta)
+save_plot(pl_delta, "ml_delta_vs_baseline", width = 12, height = 6)
+```
+
+#### Variable importance (top 10)
+
+```{r vimp, fig.height=8}
+# Helper for within-facet reordering
+reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun)
+}
+scale_x_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+}
+
+config_ids <- unique(perf_all$config_id)
+config_labels <- perf_all |> distinct(config_id, configuration)
+
+vimp_list <- map(config_ids, function(cid) {
+  f <- file.path("results", cid, "variable_importance_tidymodels.csv")
+  if (file.exists(f)) read_csv(f, show_col_types = FALSE) |> mutate(config_id = cid)
+  else NULL
+}) |> compact() |> bind_rows()
+
+rf_vimp <- vimp_list |>
+  filter(model == "random_forest") |>
+  group_by(config_id) |>
+  slice_max(Importance, n = 10) |>
+  ungroup() |>
+  left_join(config_labels, by = "config_id")
+
+pl_vimp <- rf_vimp |>
+  ggplot(aes(x = reorder_within(Variable, Importance, configuration), y = Importance)) +
+  geom_col(fill = "steelblue", width = 0.7) +
+  facet_wrap(~ configuration, scales = "free", ncol = 2) +
+  scale_x_reordered() +
+  coord_flip() +
+  labs(title = "Top 10 Variable Importance -- Random Forest",
+       x = NULL, y = "Importance (permutation)") +
+  theme_minimal(base_size = 11) +
+  theme(strip.text = element_text(face = "bold"))
+print(pl_vimp)
+save_plot(pl_vimp, "ml_vimp_random_forest", width = 13, height = 8)
+```
+
+```{r vimp_gb, fig.height=8}
+gb_vimp <- vimp_list |>
+  filter(model == "gradient_boosting") |>
+  group_by(config_id) |>
+  slice_max(Importance, n = 10) |>
+  ungroup() |>
+  left_join(config_labels, by = "config_id")
+
+pl_vimp_gb <- gb_vimp |>
+  ggplot(aes(x = reorder_within(Variable, Importance, configuration), y = Importance)) +
+  geom_col(fill = "darkorange", width = 0.7) +
+  facet_wrap(~ configuration, scales = "free", ncol = 2) +
+  scale_x_reordered() +
+  coord_flip() +
+  labs(title = "Top 10 Variable Importance -- Gradient Boosting (XGBoost)",
+       x = NULL, y = "Importance (gain)") +
+  theme_minimal(base_size = 11) +
+  theme(strip.text = element_text(face = "bold"))
+print(pl_vimp_gb)
+save_plot(pl_vimp_gb, "ml_vimp_gradient_boosting", width = 13, height = 8)
+```
+
+### Key findings
+
+```{r key_findings}
+best <- models_wide |> slice_min(mae, n = 1)
+```
+
+- **Best overall model**: `r best$model` on *`r best$configuration`* -- MAE = `r round(best$mae, 2)` (percentage points), representing a `r round(abs(best$mae_vs_baseline), 1)`% improvement over the baseline.
+- **Seasonal precipitation** (`SeasPrecipitation`) and **VPD** (`SeasVPD`) are consistently the most important climatic predictors across all configurations and models.
+- Using **seasonal aggregate** features (instead of monthly values) improves performance for the "Stable Chasselas" configuration, suggesting that for well-characterised plots, the overall seasonal climate signal is more predictive than month-by-month detail.
+- Random Forest and Gradient Boosting consistently outperform the baseline and LASSO, indicating non-linear relationships between climate and disease expression.
+
+
+### Combined variable importance
+
+Individual model importance scores use different scales (permutation importance for RF, gain for XGBoost, absolute coefficients for LASSO). To obtain a unified ranking, we apply the following procedure. Let us denote the set of models by $M$ and the set of variables (that can depend of the model considered) by $I$. 
+
+1. **Rescale** each model's importance to [0, 1] by dividing by the maximum within that model. We thus get a set of scores $s_i^m\in [0,1]$ for each $i\in I$ and $m\in M$. 
+2. **Weight** each model proportionally to its MAE improvement over the baseline:
+$$w_m = \max\!\big(0,\; (\text{MAE}_{\text{baseline}} - \text{MAE}_m) / \text{MAE}_{\text{baseline}}\big).$$
+Models that do not beat the baseline receive zero weight.
+3. **Combine** via weighted average:
+$$
+\text{Combined}_i = \dfrac{\sum_m w_m \, s_i^m}{\sum_m w_m}.
+$$
+
+```{r combined_vimp_load}
+cvi_file <- "results/combined_variable_importance.csv"
+if (!file.exists(cvi_file)) {
+  cat("*Combined variable importance not available. Run `Rscript combined_variable_importance.R` first.*\n")
+  knitr::knit_exit()
+}
+cvi <- read_csv(cvi_file, show_col_types = FALSE)
+
+# Tag each config as monthly or seasonal
+cvi <- cvi |>
+  mutate(aggregation = if_else(grepl("Seasonal", configuration), "Seasonal", "Monthly"))
+```
+
+#### Monthly configurations
+
+In monthly mode, the model uses one value per variable per month (March--October), yielding ~56 climate predictors.
+
+```{r combined_vimp_monthly, fig.height=5}
+cvi_monthly <- cvi |>
+  filter(aggregation == "Monthly") |>
+  group_by(Variable) |>
+  summarise(
+    mean_importance = mean(combined_importance),
+    n_configs = n(),
+    .groups = "drop"
+  ) |>
+  slice_max(mean_importance, n = 15, with_ties = FALSE)
+
+pl_monthly <- cvi_monthly |>
+  mutate(Variable = fct_reorder(Variable, mean_importance)) |>
+  ggplot(aes(x = Variable, y = mean_importance)) +
+  geom_col(fill = "steelblue", width = 0.7) +
+  coord_flip() +
+  labs(title = "Top 15 Combined Variable Importance -- Monthly Configurations",
+       subtitle = "Averaged across Chasselas Only, Exclude Sauvignon, Stable Chasselas",
+       x = NULL, y = "Combined importance (0-1 scale)") +
+  theme_minimal(base_size = 12)
+print(pl_monthly)
+save_plot(pl_monthly, "combined_vimp_monthly", height = 5)
+```
+
+```{r combined_vimp_monthly_table}
+kable(cvi_monthly |> arrange(desc(mean_importance)),
+      digits = 3, col.names = c("Variable", "Mean combined importance", "N configs"),
+      caption = "Top 15 variables across monthly configurations (weighted by model performance).")
+```
+
+#### Seasonal configurations
+
+In seasonal mode, the model uses a single seasonal aggregate per variable (`SeasXX`), yielding ~7 climate predictors plus soil data.
+
+```{r combined_vimp_seasonal, fig.height=4}
+cvi_seasonal <- cvi |>
+  filter(aggregation == "Seasonal") |>
+  group_by(Variable) |>
+  summarise(
+    mean_importance = mean(combined_importance),
+    n_configs = n(),
+    .groups = "drop"
+  ) |>
+  slice_max(mean_importance, n = 15, with_ties = FALSE)
+
+pl_seasonal <- cvi_seasonal |>
+  mutate(Variable = fct_reorder(Variable, mean_importance)) |>
+  ggplot(aes(x = Variable, y = mean_importance)) +
+  geom_col(fill = "darkorange", width = 0.7) +
+  coord_flip() +
+  labs(title = "Top 15 Combined Variable Importance -- Seasonal Configurations",
+       subtitle = "Averaged across Chasselas Only, Exclude Sauvignon, Stable Chasselas (Seasonal Agg)",
+       x = NULL, y = "Combined importance (0-1 scale)") +
+  theme_minimal(base_size = 12)
+print(pl_seasonal)
+save_plot(pl_seasonal, "combined_vimp_seasonal", height = 4)
+```
+
+```{r combined_vimp_seasonal_table}
+kable(cvi_seasonal |> arrange(desc(mean_importance)),
+      digits = 3, col.names = c("Variable", "Mean combined importance", "N configs"),
+      caption = "Top variables across seasonal configurations (weighted by model performance).")
+```
+
+#### Comparison
+
+```{r combined_vimp_comparison, fig.height=5}
+# Side-by-side: top 10 from each aggregation mode
+top_monthly <- cvi |>
+  filter(aggregation == "Monthly") |>
+  group_by(Variable) |>
+  summarise(importance = mean(combined_importance), .groups = "drop") |>
+  slice_max(importance, n = 10, with_ties = FALSE) |>
+  mutate(mode = "Monthly")
+
+top_seasonal <- cvi |>
+  filter(aggregation == "Seasonal") |>
+  group_by(Variable) |>
+  summarise(importance = mean(combined_importance), .groups = "drop") |>
+  slice_max(importance, n = 10, with_ties = FALSE) |>
+  mutate(mode = "Seasonal")
+
+top_both <- bind_rows(top_monthly, top_seasonal)
+
+pl_compare <- top_both |>
+  mutate(Variable = fct_reorder(Variable, importance)) |>
+  ggplot(aes(x = Variable, y = importance, fill = mode)) +
+  geom_col(width = 0.7) +
+  coord_flip() +
+  facet_wrap(~ mode, scales = "free_y") +
+  labs(title = "Monthly vs Seasonal: Top 10 Combined Variable Importance",
+       x = NULL, y = "Combined importance (0-1 scale)") +
+  scale_fill_manual(values = c("Monthly" = "steelblue", "Seasonal" = "darkorange")) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none", strip.text = element_text(face = "bold"))
+print(pl_compare)
+save_plot(pl_compare, "combined_vimp_comparison", width = 13, height = 5)
+```
+
+In both aggregation modes, **VPD** (Vapour Pressure Deficit) emerges as the most influential climate variable. In the monthly setting, VPD in April, July and October are the top predictors, along with atmospheric pressure during the growing season. In the seasonal setting, `SeasVPD` consistently dominates, followed by `SeasPrecipitation` and `SeasPressure`. The soil water reserve (`RU_nb`) also appears in several seasonal configurations, confirming that water availability -- both atmospheric (VPD) and edaphic (soil reserve) -- is the primary driver of Esca expression.
+
+---
+
+## Esca Expression vs Seasonal VPD
+
+```{r loading data, include=FALSE, echo=FALSE}
+
+# # Load the full dataset with merged weather (includes VPD)
+# source("esca_ml_config.R")
+# source("esca_ml_pipeline.R")
+
+full_data <- load_esca_data(config = config_full_dataset())
+```
+
+
+```{r plot VPD grid}
+temp_grid <- seq(11, 26, by = 0.1)
+RelHum_grid <- seq(50, 100, by = 10)
+
+df_grid <- expand.grid(Temperature = temp_grid, RelHum=RelHum_grid)
+df_grid <- df_grid |>   mutate(VPD = 0.611 * exp((17.27 * Temperature)/ (237.3 + Temperature))) |> 
+  mutate(VPD = VPD * (1- RelHum/100)) 
+
+ggplot(data = df_grid, aes(x = Temperature, y = VPD, col = as.factor(RelHum))) +
+  geom_line() +
+  scale_color_discrete("Relative Humidity") +
+  ggtitle(label = "VPD", subtitle = "In terms of temperature and relative humidity")
+
+```
+
+```{r vpd_scatter, fig.height=4.5, fig.width=9}
+
+# SeasVPD is computed from monthly VPD columns during load_merged_weather_data()
+pl_vpd <- full_data |>
+  filter(!is.na(SeasVPD), !is.na(SumSymptApo)) |>
+  ggplot(aes(x = SeasVPD, y = SumSymptApo)) +
+  geom_point(aes(colour = region), alpha = 0.5, size = 1.8) +
+  geom_smooth(method = "gam", se = FALSE, colour = "black", linewidth = 0.8) +
+  labs(title = "Esca Expression vs Seasonal VPD",
+       subtitle = "Each point = one plot-year observation",
+       x = "Seasonal VPD (mean of max daily VPD, March–October, kPa)",
+       y = "Symptoms + Apoplexy (%)",
+       colour = "Region") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "right",
+        legend.key.size = unit(0.4, "cm"))
+
+pl_vpd
+```
+---
+
+
+## Conclusions and take home message
+
+From the data, we can conclude that
+
+- There is **no evidence of a negative evolution of the incidence of the esca disease over the years**, not globally, nor by region.
+- There are strong regional differences, that only partially explained by the meteorological conditions. Some other factors, such as the pedology, the variety, the rootstock are certainly playing an important role that cannot be highlighted with the data at hand.
+
+Regarding the climatic variable having an influence on the expression of the esca disease:
+
+1. Results must be interpreted **with care**. The predictive power is low, and the results must be considered with care and only in comparison with other papers.  Esca expression has high inherent variability, even given meteorological data.
+2. VPD is the primary environmental driver of Esca expression. However, this being a function of both relative humidity and temperature.
+3. Water stress (VPD + precipitation + soil reserve) seems to be the "fil rouge"  across all analyses focusing on variable importance.
+4. In the monthly dataset, we observe some spurious correlations. Since the observations were all made in late August, the fact that monthly variables of September and October appear can only be an artifact. This cast doubts about the results. 
+
+## Relation to the literature
+
+The results are essentially in line with the literature. 
+
+
+- High VPD -> less esca. In line with [Bortolami et al. (PNAS, 2021)](https://doi.org/10.1073/pnas.2112825118)
+- Correlations similar to those described in [F. Calzarano et al. (Phytopathologia Mediterranea, 2018)]
+(https://doi.org/10.14601/Phytopathol_Mediterr-23787)
+- Relation to Water Holding Soil Capacity not clear but **data are scarce**. Other aspects in line with [Monod et al. , 2023](https://doi.org/10.20870/oeno-one.2025.59.1.7659), while some others are not corroborated. 
+
+
+>Esca incidence was correlated with precipitation, 
+particularly in May and June by our regression analyses 
+(Figure 9). Previous studies have mentioned that cool, 
+rainy summers favour the expression of esca leaf symptoms 
+(Surico et al., 2000; Marchi et al., 2006) and especially the 
+rainfall pattern from May to July (Calzarano et al., 2018b), 
+which is consistent with our results. According to our 
+observations, the years characterised by the highest rainfall 
+are those in which the incidence of esca is the highest across 
+the network of vineyards (years 2019 and 2021; Figures 4 
+and 5). Hot and dry summers are considered to favour 
+apoplexy (Surico et al., 2000; Marchi et al., 2006). The 
+appearance of apoplectic events was not linked with hot and 
+dry weather in our observations. On the contrary, the year 
+2018 was particularly hot and dry during the summer and 
+was the year with the lowest number of apoplectic events and foliar symptom rates (Figures 3 and 4). The year 2021 was 
+the wettest year with the highest number of foliar symptoms 
+and apoplectic events in three of the four viticultural regions 
+monitored. Both years 2019 and 2021 were characterised by 
+a particularly rainy and cold May, followed by a hot (2019) 
+or rainy and hot (2021) summer. These observations align 
+with earlier research, including Surico et al. (2000), which 
+proposed a relation between apoplexy and alternating periods 
+of dry, hot weather and wet, cool conditions. Such weather 
+patterns promote vigorous leaf and canopy growth, leading 
+to high evapotranspiration rates, and potentially disrupting 
+sap flow (McDowell et al., 2008)
