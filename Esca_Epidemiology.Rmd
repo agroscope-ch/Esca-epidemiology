@@ -200,7 +200,7 @@ save_widget(ggplotly(pl), "prop_evolution_SympApo")
 
 ```{r evolution_symptoms, eval=FALSE}
 qfit <- qgam(percentage_symptoms ~ s(Year), qu = .5,
-             data = Esca |> select(Year, percentage_symptoms) |> drop_na())
+             data = Esca |> select(Year, percentage_symptoms) |> drop_na(), control = list(progress = "none"))
 df.quant <- data.frame(Esca |> select(Year, percentage_symptoms) |> drop_na(),
                        Quant = predict(qfit))
 
@@ -230,7 +230,7 @@ dat_reg <- Esca |>
   drop_na() |> 
   mutate(region = factor(region))
 
-qfit <- qgam(percentage_symptoms ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg)
+qfit <- qgam(percentage_symptoms ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg, control = list(progress = "none"))
 df.quant <- dat_reg |> mutate(Quant = predict(qfit))
 
 pl <- ggplot(dat_reg, aes(x = as.factor(Year), y = percentage_symptoms)) + 
@@ -285,7 +285,7 @@ dat_reg2 <- Esca |>
   drop_na() |> 
   mutate(region = factor(region))
 
-qfit <- qgam(SymptApo ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg2)
+qfit <- qgam(SymptApo ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg2, control = list(progress = "none"))
 df.quant <- expand.grid(region = unique(dat_reg2$region), Year = with(Esca, seq(min(Year), max(Year), by = 0.25)), control = list(progress = "none"))
 
 df.quant <- expand.grid(region = unique(dat_reg2$region), Year = with(Esca, seq(min(Year), max(Year), by = 0.25)))
@@ -455,17 +455,17 @@ if (maps_available) {
   }
   
   # Median maps for stable plots
-  df_median2004 <- Esca |> 
-    filter(group_year == "2004-2022" & Year >= 2004) |> 
+  df_median2012 <- Esca |> 
+    filter(stable_group == "2012-2022" & Year >= 2012) |> 
     group_by(plot, region, E_lv95, N_lv95) |> 
     summarise(MedianSymptApo = median(SymptApo), .groups = "drop") |> 
     rename(x = E_lv95, y = N_lv95, z = MedianSymptApo)
   
-  pl_med <- maps_year_Zoom(data = df_median2004, 
-                           lab_scale = "Median (%) 2004-2022", xupperbnd = 3) + 
-    ggtitle("Median Symptoms + Apoplexy", subtitle = "Stable plots: 2004-2022")
+  pl_med <- maps_year_Zoom(data = df_median2012, 
+                           lab_scale = "Median (%) 2012-2022", xupperbnd = 3) + 
+    ggtitle("Median Symptoms + Apoplexy", subtitle = "Stable plots: 2012-2022")
   print(pl_med)
-  save_plot(pl_med, "map_median_2004_2022")
+  save_plot(pl_med, "map_median_2012_2022")
 }
 ```
 
@@ -535,9 +535,8 @@ pl = pl1 + pl2  +
   title = "Proportion (%) of vine stock with symptoms or apoplexy — by region",
   subtitle = 'Stable plots'
   )
-pl
 
-save_plot(pl, "stable_plots_2022", height = 12)
+save_plot(pl, "stable_plots_2022", height = 10, width = 15)
 ```
 
 
@@ -662,14 +661,6 @@ save_plot(pl_corr_seasonal, "corr_spearman_seasonal", height = 3.5, width = 7)
 
 ## FORD Variable Selection {.tabset}
 
-### Algorithm description
-
-**FORD** (Feature Ordering by Integrated $R^2$ Dependence is a model-agnostic variable selection algorithm that identifies statistically significant predictors without relying on any specific model or assumptions. See the reference for more details.  
-
-The method works by comparing each variable's conditional dependence with the response. Variables are selected sequentially: at each step, the variable most associated with the response is chosen, and the procedure stops when no remaining variable exceeds are positively associated in the sense of the integrated $R^2$ measure.
-
-**Reference**: Azkadia, M. and Roudaki, P. (2025). *A new measure of dependence: Integrated $R^2$*, .
-
 ### Results
 
 ```{r ford_results}
@@ -689,7 +680,7 @@ if (!ford_available && !ford_seasonal_available) {
 ```{r ford_monthly_results}
 if (ford_available) {
   ford_df <- read_csv(ford_file, show_col_types = FALSE)
-  cat("FORD selected **", nrow(ford_df), "** variables as statistically significant predictors (monthly mode):\n\n")
+  # cat("FORD selected **", nrow(ford_df), "** variables as statistically significant predictors (monthly mode):\n\n")
   kable(ford_df, digits = 3,
         caption = "Variables selected by FORD -- monthly climate variables (ordered by selection step)")
 } else {
@@ -718,7 +709,7 @@ if (ford_available && exists("ford_df") && nrow(ford_df) > 0) {
 ```{r ford_seasonal_results}
 if (ford_seasonal_available) {
   ford_df_seasonal <- read_csv(ford_file_seasonal, show_col_types = FALSE)
-  cat("FORD selected **", nrow(ford_df_seasonal), "** variable(s) as statistically significant predictors (seasonal mode):\n\n")
+  # cat("FORD selected **", nrow(ford_df_seasonal), "** variable(s) as statistically significant predictors (seasonal mode):\n\n")
   kable(ford_df_seasonal, digits = 3,
         caption = "Variables selected by FORD -- seasonal aggregate variables (ordered by selection step)")
 } else {
@@ -757,6 +748,16 @@ It has been suggested in the literature that Esca expression is linked to abrupt
 - **`Contrast_MayJune_VPD`** = VPD~June~ − VPD~May~ — captures the abrupt shift in atmospheric water demand between May and June. A large positive value indicates a rapid transition from cool/humid to hot/dry conditions.
 
 This variable is included in both the monthly and seasonal FORD analyses. If the hypothesis holds, FORD should detect this contrast as a significant predictor of Esca expression. The Spearman correlations in the preceding section provide an initial assessment of the strength and direction of this association.
+
+### Algorithm description
+
+**FORD** (Feature Ordering by Integrated $R^2$ Dependence is a model-agnostic variable selection algorithm that identifies statistically significant predictors without relying on any specific model or assumptions. See the reference for more details.  
+
+The method works by comparing each variable's conditional dependence with the response. Variables are selected sequentially: at each step, the variable most associated with the response is chosen, and the procedure stops when no remaining variable are positively associated in the sense of the integrated $R^2$ measure.
+
+**Reference**: Azkadia, M. and Roudaki, P. (2025). *A new measure of dependence: Integrated $R^2$*, .
+
+
 
 
 ## Predictive Modelling
@@ -1012,14 +1013,17 @@ cvi_monthly <- cvi |>
     .groups = "drop"
   ) |>
   slice_max(mean_importance, n = 15, with_ties = FALSE)
+names_config <- cvi |> pull(configuration) |> unique() 
+config_names <- names_config[! grepl(pattern = "Seasonal", x = names_config)]
 
 pl_monthly <- cvi_monthly |>
   mutate(Variable = fct_reorder(Variable, mean_importance)) |>
   ggplot(aes(x = Variable, y = mean_importance)) +
-  geom_col(fill = "steelblue", width = 0.7) +
+  geom_col(fill = palette.colors()[4], width = 0.7) +
   coord_flip() +
   labs(title = "Top 15 Combined Variable Importance -- Monthly Configurations",
-       subtitle = "Averaged across Chasselas Only, Exclude Sauvignon, Stable Chasselas",
+       subtitle = paste0("Averaged across ",
+                         paste0(config_names, collapse = ", ")),
        x = NULL, y = "Combined importance (0-1 scale)") +
   theme_minimal(base_size = 12)
 print(pl_monthly)
@@ -1050,10 +1054,11 @@ cvi_seasonal <- cvi |>
 pl_seasonal <- cvi_seasonal |>
   mutate(Variable = fct_reorder(Variable, mean_importance)) |>
   ggplot(aes(x = Variable, y = mean_importance)) +
-  geom_col(fill = "darkorange", width = 0.7) +
+  geom_col(fill = palette.colors()[8], width = 0.7) +
   coord_flip() +
   labs(title = "Top 15 Combined Variable Importance -- Seasonal Configurations",
-       subtitle = "Averaged across Chasselas Only, Exclude Sauvignon, Stable Chasselas (Seasonal Agg)",
+       subtitle = paste0("Averaged across ",
+                         paste0(config_names, collapse = ", "), "\n(Seasonal Agg)"),
        x = NULL, y = "Combined importance (0-1 scale)") +
   theme_minimal(base_size = 12)
 print(pl_seasonal)
@@ -1094,7 +1099,7 @@ pl_compare <- top_both |>
   facet_wrap(~ mode, scales = "free_y") +
   labs(title = "Monthly vs Seasonal: Top 10 Combined Variable Importance",
        x = NULL, y = "Combined importance (0-1 scale)") +
-  scale_fill_manual(values = c("Monthly" = "steelblue", "Seasonal" = "darkorange")) +
+  scale_fill_manual(values = c("Monthly" = palette.colors()[4], "Seasonal" = palette.colors()[8])) +
   theme_minimal(base_size = 12) +
   theme(legend.position = "none", strip.text = element_text(face = "bold"))
 print(pl_compare)

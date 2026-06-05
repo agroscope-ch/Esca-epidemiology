@@ -5,7 +5,7 @@
 # ===============================================================================
 
 source("esca_ml_config.R")
-
+month_season <- c(3:8)
 # =============================================================================
 # DATA LOADING AND PREPARATION FUNCTIONS
 # =============================================================================
@@ -21,7 +21,7 @@ load_vpd_data <- function() {
   
   vpd_df <- vpd_raw |>
     # Filter for growing season (March-October)
-    filter(Month %in% c(3:10)) |>
+    filter(Month %in% month_season) |>
     # Create month names for pivoting
     mutate(Month_name = lubridate::month(Month, label = TRUE, abbr = FALSE)) |>
     # Transform to wide format by month
@@ -63,7 +63,7 @@ load_vitimeteo_data <- function() {
       Month = month(Month_num, label = TRUE, abbr = FALSE)
     ) |>
     # Filter for growing season (March-October)
-    filter(Month_num %in% c(3:10)) |>
+    filter(Month_num %in% month_season) |>
     # Map Vitimeteo sensor names to MeteoSwiss equivalents
     mutate(
       sensor = case_when(
@@ -120,7 +120,7 @@ load_MeteoSwiss_data <- function() {
       nbMonth = lubridate::month(datetime),
       Month = lubridate::month(datetime, label = TRUE, abbr = FALSE)
     ) |> 
-    filter(nbMonth %in% c(3:10)) |> 
+    filter(nbMonth %in% month_season) |> 
     select(-datetime, -nbMonth) |> 
     pivot_wider(
       values_from = c(Temperature, Pressure, Precipitation, Radiation, Humidity, Evapotranspiration), 
@@ -197,7 +197,7 @@ load_merged_weather_data <- function(config) {
   
   # Common variable names for both sources
   climate_vars <- c("Temperature", "Humidity", "Precipitation", "Evapotranspiration", "Radiation")
-  months_growing <- c(3:10)
+  months_growing <- month_season
   month_labels <- month(months_growing, label = TRUE, abbr = FALSE)
   
   vitimeteo_wide <- vitimeteo_raw |>
@@ -447,7 +447,6 @@ load_merged_weather_data <- function(config) {
 #' @param data_subset Optional named list to filter data (e.g., list(Year = 2015:2020))
 #' @return Prepared dataset as tibble
 load_esca_data <- function(config, data_subset = NULL) {
-  
   set.seed(config$seed)
   
   # Validate weather data source parameter
@@ -510,7 +509,7 @@ load_esca_data <- function(config, data_subset = NULL) {
     }
     if (!is.null(config$data$filter_variety)) {
       cat("Filtering by variety:", config$data$filter_variety, "\n")
-      combined_data <- combined_data |> filter(variety == config$data$filter_variety)
+      combined_data <- combined_data |> filter(variety %in% config$data$filter_variety)
     }
     if (!is.null(config$data$exclude_variety)) {
       cat("Excluding variety/varieties:", paste(config$data$exclude_variety, collapse = ", "), "\n")
