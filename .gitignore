@@ -1,2 +1,10 @@
 archive_scripts/*
 *.ipnyb
+*.html
+.Rproj.user
+.positai
+.Renviron
+.Rhistory
+export_figures.R
+MWE_interactive_map_Esca_weather_stations.*
+

@@ -6,7 +6,7 @@ library(purrr)  # Added for keep() function in idDataType mapping
 # source(file = "match_API_names.R")
 month_flag = FALSE
 url <- 'https://vitimeteo.ch/api/'
-auth <- authenticate("ProbaStat", "math234d", type = 'basic')
+auth <- authenticate(Sys.getenv("VITIMETEO_USER"), Sys.getenv("VITIMETEO_PASSWORD"), type = 'basic')
 # Sensor configuration - ROBUST MAPPING USING idDataType!
 sens_indices <- c(1,4,6,10,11)
 sens_names <- c("Temperature", "RelHum", "Rainfall", "EPT", "Radiation") 
@@ -41,7 +41,7 @@ if(length(test_response$chart) > 0) {
 }
 cat("=====================================\n")
 
-start_date = "2003-01-01"
+start_date = "2001-01-01"
 end_date = "2022-12-31"
 dates_call <- paste0("startdate=",start_date , "&enddate=", end_date, sep = "")
 
@@ -110,10 +110,12 @@ for(idStat in list_of_stations)
 
 names(df_weather) <- c("date", "value", "sensor", "Station_ID")
 if(!month_flag){df_weather$date <- strptime(df_weather$date, format = "%Y-%m-%d %H:%M:%S")}
-df_weather <- df_weather |> 
-  mutate(value = as.numeric(value), sensor = factor(sensor), Station_ID = factor(Station_ID)) |> 
-  left_join(y = station_mapping |> select(-Excel_Station) |> mutate(API_ID = factor(API_ID)), 
-            by = c("Station_ID" = "API_ID"))
+
+
+df_weather <- df_weather |>
+  mutate(value = as.numeric(value), sensor = factor(sensor), Station_ID = factor(Station_ID)) |>
+  left_join(y = stations_associations |> select(station_id, station_name) |> mutate(station_id = factor(station_id)),
+            by = c("Station_ID" = "station_id"))
 if(month_flag){
   write_csv2(df_weather, file = "data/weather_data_Agrometeo_Esca_plots_monthly.csv")
 } else
@@ -121,4 +123,8 @@ if(month_flag){
   write_csv2(df_weather, file = "data/weather_data_Agrometeo_Esca_plots.csv")
 }
 
-# df_weather |> group_by(API_Station, sensor ) |> summarise(MinDate = min(date), MaxDate = max(date)) |> View()
+df_weather |> 
+  group_by(API_Station, sensor ) |> 
+  summarise(MinDate = min(date), MaxDate = max(date)) |> View()
+
+

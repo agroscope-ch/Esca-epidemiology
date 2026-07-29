@@ -7,7 +7,7 @@ library(stringr)
 
 # API Configuration
 url <- "https://vitimeteo.ch/api/"
-auth <- authenticate("ProbaStat", "math234d", type = 'basic')
+auth <- authenticate(Sys.getenv("VITIMETEO_USER"), Sys.getenv("VITIMETEO_PASSWORD"), type = 'basic')
 
 stations_endpoint <- paste0(url, 'stations.json')
 station_API <- content(GET(stations_endpoint, auth))

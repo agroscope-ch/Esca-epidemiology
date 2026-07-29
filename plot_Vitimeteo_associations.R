@@ -9,10 +9,10 @@ library(sf)         # for coordinate transformation
 # Load the main Esca dataset
 esca_data <- read_csv("data/Esca_CH_2001-2022.csv", 
                       locale = locale(encoding = "latin1"))
-
-# Load the stable plots information
-stable_plots <- read_csv("data/Esca_CH_2001-2022_stable_plots.csv", 
-                         locale = locale(encoding = "latin1"))
+# 
+# # Load the stable plots information
+# stable_plots <- read_csv("data/Esca_CH_2001-2022_stable_plots.csv", 
+#                          locale = locale(encoding = "latin1"))
 
 ## ----vitimeteo-station-association--------------------------------------------
 
@@ -140,7 +140,7 @@ build_plot_station_associations <- function(esca_data, use_fallback_for_early_ye
     }
     
     # Handle multiple coordinate pairs for the same plot (use the first one)
-    # For many plots, the actual location where data were collected did slighlty
+    # For many plots, the actual location where data were collected did slightly
     # change over the years. The plot index stayed the same, while
     # the location changed. But this should not make any difference 
     # in the attribution of the Vitimeteo station

@@ -7,7 +7,7 @@ library(stringr)
 
 # API Configuration
 url <- "https://vitimeteo.ch/api/"
-auth <- authenticate("ProbaStat", "math234d", type = 'basic')
+auth <- authenticate(Sys.getenv("VITIMETEO_USER"), Sys.getenv("VITIMETEO_PASSWORD"), type = 'basic')
 
 # Function to extract individual station names from Excel entries
 extract_station_names <- function(station_string) {

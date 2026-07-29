@@ -2,7 +2,9 @@
 title: "Analyse données Esca, 2001 - 2022"
 author: "Matthieu Wilhelm"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-output: html_document
+output:
+  html_document:
+    self_contained: true
 ---
 
 
@@ -66,6 +68,21 @@ Esca <- read.table(file = "data/Esca_CH_2001-2022.csv", header = TRUE, sep = ","
                                      true = variety, false = "Other variety")) |> 
   mutate(SymptApo = percentage_symptoms + percentage_apoplexy)
 
+Esca_levels_regions <- Esca |> 
+  count(region) |> 
+  mutate(prop = n / sum(n)) |> 
+  mutate(region = fct_reorder(region, prop, .desc = TRUE))  # ensures that the levels order is common, even in the case of re-ordering in the decreasing order of regions
+Esca_levels_variety <- Esca |> 
+  count(variety) |> 
+  mutate(prop = n / sum(n)) |> 
+  arrange(desc(prop)) |> 
+  mutate(variety = fct_reorder(variety, prop, .desc = TRUE)) |> 
+  mutate(prop = NULL)
+
+Esca <- Esca |> 
+  mutate(region = factor(region, levels =levels(Esca_levels_regions$region)),
+         variety = factor(variety, levels =levels(Esca_levels_variety$variety)))  
+
 linewd <- 0.8
 ```
 
@@ -94,6 +111,7 @@ pl2 <- Esca |>
   geom_bar(position = "dodge") +
   xlab("Year") + ylab("Sample size") +
   ggtitle("Number of samples", subtitle = "by year and region") +
+  scale_fill_discrete(palette = "Okabe-Ito") +
   theme_minimal()
 print(pl2)
 save_plot(pl2, "samples_year_region", height = 5)
@@ -101,9 +119,9 @@ save_plot(pl2, "samples_year_region", height = 5)
 
 ```{r proportions, fig.height=4.5}
 pl_variety <- Esca |> 
-  count(variety) |> 
-  mutate(prop = n / sum(n)) |> 
-  arrange(desc(prop)) |> 
+  count(variety) |>
+  mutate(prop = n / sum(n)) |>
+  arrange(desc(prop)) |>
   mutate(variety = fct_reorder(variety, prop, .desc = TRUE)) |>
   ggplot(aes(x = variety, y = prop, fill = variety)) +
   geom_col() +
@@ -117,15 +135,17 @@ print(pl_variety)
 save_plot(pl_variety, "prop_variety", height = 4.5)
 save_widget(ggplotly(pl_variety), "prop_variety")
 
-pl_region <- Esca |> 
-  count(region) |> 
-  mutate(prop = n / sum(n)) |> 
+pl_region <- Esca |>
+  count(region) |>
+  mutate(prop = n / sum(n)) |>
+  arrange(desc(prop)) |>
   mutate(region = fct_reorder(region, prop, .desc = TRUE)) |>
   ggplot(aes(x = region, y = prop, fill = region)) +
   geom_col() +
   ylab("Proportion") +
   ggtitle("Proportion by region in the data set") +
   theme_minimal() +
+  scale_fill_discrete(palette = "Okabe-Ito") +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         legend.title = element_blank()) +
   scale_y_continuous(labels = scales::label_percent())
@@ -254,31 +274,6 @@ save_widget(ggplotly(pl), "prop_evolution_sympt_regions")
 ```
 
 ```{r evo_region_symptapo, fig.height=7}
-# dat_reg2 <- Esca |> 
-#   select(Year, SymptApo, region) |> 
-#   drop_na() |> 
-#   mutate(region = factor(region))
-# 
-# qfit <- qgam(SymptApo ~ s(Year, region, bs = "fs"), qu = .5, data = dat_reg2)
-# df.quant <- dat_reg2 |> mutate(Quant = predict(qfit))
-# 
-# pl <- ggplot(dat_reg2, aes(x = as.factor(Year), y = SymptApo)) + 
-#   geom_boxplot(outlier.alpha = 0.3) +
-#   facet_wrap(~ region) +
-#   geom_line(data = df.quant, 
-#             aes(x = as.integer(as.factor(Year)), y = Quant, col = "smooth median"),
-#             linewidth = linewd) +
-#   geom_smooth(aes(x = as.integer(as.factor(Year)), y = SymptApo, col = "smooth mean"), 
-#               se = FALSE, linewidth = linewd) +
-#   xlab("Year") + ylab("Symptoms + Apoplexy (%)") +
-#   scale_x_discrete(breaks = year.br, labels = year.lab) + 
-#   scale_color_discrete("") +
-#   ggtitle("Proportion (%) of vine stock with symptoms or apoplexy — by region") +
-#   coord_cartesian(ylim = c(0, 10)) +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-# print(pl)
-
 
 dat_reg2 <- Esca |> 
   select(Year, SymptApo, region) |> 
@@ -381,30 +376,19 @@ save_plot(pl_training, "boxplots_training_regions", height = 5)
 
 The training system does not seem to have an effect.
 
-```{r eda_variety, fig.height=6, eval=FALSE}
-pl_apo <- ggplot(Esca, aes(x = variety, y = percentage_apoplexy, fill = region)) + 
+```{r eda_variety, fig.height=6, eval=TRUE}
+pl_apo <- ggplot(Esca, aes(x = variety, y = SymptApo, fill = region)) + 
   geom_boxplot(outlier.alpha = 0.3) +
   facet_wrap(~ region) +
-  xlab("Variety") + ylab("Apoplexy (%)") +
-  ggtitle("Apoplexy by variety and region") +
+  xlab("Variety") + ylab("Symptoms + apoplexy (%)") +
+  ggtitle("Symptoms + apoplexy (%) by variety and region") +
+  scale_fill_discrete(palette = "Okabe-Ito") +
   coord_cartesian(ylim = c(0, 10)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 print(pl_apo)
-save_plot(pl_apo, "boxplots_apo_regions")
-save_widget(ggplotly(pl_apo), "boxplots_apo_regions")
-
-pl_sympt <- ggplot(Esca, aes(x = variety, y = percentage_symptoms, fill = region)) + 
-  geom_boxplot(outlier.alpha = 0.3) +
-  facet_wrap(~ region) +
-  xlab("Variety") + ylab("Symptoms (%)") +
-  ggtitle("Symptoms by variety and region") +
-  coord_cartesian(ylim = c(0, 10)) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-print(pl_sympt)
-save_plot(pl_sympt, "boxplots_sympt_regions")
-save_widget(ggplotly(pl_sympt), "boxplots_sympt_regions")
+save_plot(pl_apo, "boxplots_SymptApo_regions")
+save_widget(ggplotly(pl_apo), "boxplots_SymptApo_regions")
 ```
 
 In terms of grape varieties, sauvignon blanc appears more sensitive than other varieties. However, the small number of samples does not allow a decisive conclusion (< ~1% of the sample). Furthermore, this variety is only found in certain regions, so it is difficult to separate variety sensitivity from regional effects. In the following analysis and because of the very low number of observations, we will **exclude the plots with sauvignon blanc**. The plot also has a particular history that may explain a particular behavior.
@@ -456,7 +440,7 @@ if (maps_available) {
   
   # Median maps for stable plots
   df_median2012 <- Esca |> 
-    filter(stable_group == "2012-2022" & Year >= 2012) |> 
+    filter(!is.na(stable_group) & Year >= 2012) |> 
     group_by(plot, region, E_lv95, N_lv95) |> 
     summarise(MedianSymptApo = median(SymptApo), .groups = "drop") |> 
     rename(x = E_lv95, y = N_lv95, z = MedianSymptApo)
@@ -466,6 +450,30 @@ if (maps_available) {
     ggtitle("Median Symptoms + Apoplexy", subtitle = "Stable plots: 2012-2022")
   print(pl_med)
   save_plot(pl_med, "map_median_2012_2022")
+}
+```
+
+### Interactive map of Esca plots and weather stations
+
+```{r interactive_map_plots_stations, results='asis'}
+interactive_map_html <- "plots/esca_weather_stations_interactive.html"
+
+if (file.exists(interactive_map_html)) {
+  html_raw <- paste(readLines(interactive_map_html, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  html_srcdoc <- htmltools::htmlEscape(html_raw, attribute = TRUE)
+  cat(sprintf(
+    '<iframe srcdoc="%s" width="100%%" height="850" style="border:none;"></iframe>',
+    html_srcdoc
+  ))
+} else {
+  cat("\n\n*Interactive map not rendered:* file `plots/esca_weather_stations_interactive.html` not found.\n\n")
+}
+```
+
+```{r static_map_plots_stations, fig.height=8, fig.width=11}
+if (exists("p")) {
+  print(p)
+  save_plot(p, "esca_weather_stations_static", width = 11, height = 8)
 }
 ```
 
@@ -840,18 +848,54 @@ The Mean Absolute Error (MAE) represents the average absolute difference between
 summary_table <- models_wide |>
   arrange(configuration, mae) |>
   mutate(
-    mae_delta = paste0(ifelse(mae_vs_baseline > 0, "+", ""), round(mae_vs_baseline, 1), "%")
+    mae_delta_num = mae_vs_baseline
   ) |>
   select(Configuration = configuration, Model = model,
-         MAE = mae, `Delta MAE vs baseline` = mae_delta,
-         RMSE = rmse, `R2` = rsq) |>
+         MAE = mae, `Delta MAE vs baseline` = mae_delta_num,
+         RMSE = rmse) |>
   left_join(
     baseline_wide |> select(Configuration = configuration, `Baseline MAE` = baseline_mae),
     by = "Configuration"
   )
 
-kable(summary_table, digits = 3,
-      caption = "Test-set performance. Delta MAE shows % change relative to baseline (negative = better).")
+# Format with bold best per configuration and alternating background
+metric_cols <- c("MAE", "RMSE")
+bold_col <- "Delta MAE vs baseline"  # best = most negative
+
+display_df <- summary_table |>
+  group_by(Configuration) |>
+  group_modify(~{
+    d <- .x
+    # Find best (minimum) Delta MAE vs baseline
+    best_idx <- which.min(d[[bold_col]])[1]
+    # Format numeric columns
+    for (mc in metric_cols) {
+      d[[mc]] <- sprintf("%.3f", d[[mc]])
+      d[[mc]][best_idx] <- paste0("**", d[[mc]][best_idx], "**")
+    }
+    # Format Delta MAE column
+    d[[bold_col]] <- sprintf("%+.1f%%", d[[bold_col]])
+    d[[bold_col]][best_idx] <- paste0("**", d[[bold_col]][best_idx], "**")
+    # Format Baseline MAE
+    d[["Baseline MAE"]] <- sprintf("%.3f", d[["Baseline MAE"]])
+    d
+  }) |>
+  ungroup()
+
+config_order <- unique(display_df$Configuration)
+row_groups <- split(seq_len(nrow(display_df)), display_df$Configuration)
+
+tbl <- kable(display_df, align = "llrrrr", escape = FALSE,
+             caption = "Test-set performance by configuration (best per group in bold). Delta MAE shows % change relative to baseline (negative = better).") |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed"))
+
+for (i in seq_along(config_order)) {
+  rows <- row_groups[[as.character(config_order[[i]])]]
+  bg <- if (i %% 2 == 1) "#E4F0FF" else "#FFF4CC"
+  tbl <- row_spec(tbl, rows, background = bg)
+}
+
+tbl
 ```
 
 #### MAE comparison plot
@@ -894,10 +938,11 @@ pl_delta <- models_wide |>
   theme(legend.position = "none", strip.text = element_text(face = "bold"))
 print(pl_delta)
 save_plot(pl_delta, "ml_delta_vs_baseline", width = 12, height = 6)
+
 ```
-
+  
 #### Variable importance (top 10)
-
+  
 ```{r vimp, fig.height=8}
 # Helper for within-facet reordering
 reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
@@ -938,7 +983,7 @@ pl_vimp <- rf_vimp |>
 print(pl_vimp)
 save_plot(pl_vimp, "ml_vimp_random_forest", width = 13, height = 8)
 ```
-
+  
 ```{r vimp_gb, fig.height=8}
 gb_vimp <- vimp_list |>
   filter(model == "gradient_boosting") |>
@@ -1056,7 +1101,7 @@ pl_seasonal <- cvi_seasonal |>
   ggplot(aes(x = Variable, y = mean_importance)) +
   geom_col(fill = palette.colors()[8], width = 0.7) +
   coord_flip() +
-  labs(title = "Top 15 Combined Variable Importance -- Seasonal Configurations",
+  labs(title = "Top Combined Variable Importance -- Seasonal Configurations",
        subtitle = paste0("Averaged across ",
                          paste0(config_names, collapse = ", "), "\n(Seasonal Agg)"),
        x = NULL, y = "Combined importance (0-1 scale)") +
@@ -1106,7 +1151,7 @@ print(pl_compare)
 save_plot(pl_compare, "combined_vimp_comparison", width = 13, height = 5)
 ```
 
-In both aggregation modes, **VPD** (Vapour Pressure Deficit) emerges as the most influential climate variable. In the monthly setting, VPD in April, July and October are the top predictors, along with atmospheric pressure during the growing season. In the seasonal setting, `SeasVPD` consistently dominates, followed by `SeasPrecipitation` and `SeasPressure`. The soil water reserve (`RU_nb`) also appears in several seasonal configurations, confirming that water availability -- both atmospheric (VPD) and edaphic (soil reserve) -- is the primary driver of Esca expression.
+In both aggregation modes, **VPD** (Vapour Pressure Deficit) emerges as the most influential climate variable. In the monthly setting, VPD in April, July and October are the top predictors, along with atmospheric pressure during the growing season. In the seasonal setting, `SeasVPD` consistently dominates, followed by `SeasPrecipitation` and `SeasPressure`.This confirms that water (un)availability is an important driver of esca disease.
 
 ---
 
@@ -1147,7 +1192,7 @@ pl_vpd <- full_data |>
   geom_smooth(method = "gam", se = FALSE, colour = "black", linewidth = 0.8) +
   labs(title = "Esca Expression vs Seasonal VPD",
        subtitle = "Each point = one plot-year observation",
-       x = "Seasonal VPD (mean of max daily VPD, March–October, kPa)",
+       x = "Seasonal VPD (mean of max daily VPD, March–August, kPa)",
        y = "Symptoms + Apoplexy (%)",
        colour = "Region") +
   theme_minimal(base_size = 11) +
@@ -1156,6 +1201,289 @@ pl_vpd <- full_data |>
 
 pl_vpd
 ```
+
+### Regional comparison: P/ET ratio and VPD vs Esca incidence
+
+To characterise the regional climate, we computed the ratio of seasonal precipitation (P) to seasonal reference evapotranspiration (ET, FAO Penman-Monteith) for one representative MeteoSwiss station per region: Aigle (AIG, Chablais), Changins (CGI, La Côte), Pully (PUY, Lavaux), Neuchâtel (NEU, Neuchâtel), Mathod (MAH, Nord Vaudois), and Sion (SIO, Valais). Data were obtained from the MeteoSwiss OGD portal (monthly variables `rre150m0` and `erefaom0`) over 1996–2025 and aggregated over the configured seasonal window. Since the observations were made in late August, the time window consists in the ratio of precipitation with evaporation over the previous year, thus ranging from September of the previous year to the current of August. Note that Mathod has precipitation data only from 2005 and evapotranspiration from 1996, so fewer years are available for Nord Vaudois. A ratio P/ET > 1 indicates a net water surplus, while P/ET < 1 indicates a deficit. The seasonal VPD is computed as described above (mean of maximum daily VPD over March–August of the current year).
+
+```{r regional_climate_mode_config}
+# Choose which climate mode to visualize in regional P/ET plots.
+# Allowed values: "yearly_native", "seasonal_monthly"
+climate_mode_to_plot <- "seasonal_monthly"
+
+if (!(climate_mode_to_plot %in% c("yearly_native", "seasonal_monthly"))) {
+  stop("climate_mode_to_plot must be 'yearly_native' or 'seasonal_monthly'.")
+}
+```
+
+```{r regional_climate_vs_esca, fig.height=5, fig.width=12}
+# --- Median Esca incidence by region ---
+median_esca <- full_data |>
+ filter(!is.na(SumSymptApo)) |>
+ group_by(region) |>
+ summarise(median_esca = median(SumSymptApo), .groups = "drop")
+
+# --- P/ET ratio by region ---
+pet_file <- "data/regional_climate_P_ET_summary.csv"
+if (file.exists(pet_file)) {
+  pet_summary <- read_csv(pet_file, show_col_types = FALSE) |>
+    filter(mode == climate_mode_to_plot) |>
+    mutate(region = gsub("_", " ", region))
+
+  pet_window <- pet_summary |>
+    distinct(season_start_month, season_end_month) |>
+    filter(!is.na(season_start_month), !is.na(season_end_month))
+
+  season_label_pet <- if (
+    nrow(pet_window) == 1 &&
+      pet_window$season_start_month >= 1 && pet_window$season_start_month <= 12 &&
+      pet_window$season_end_month >= 1 && pet_window$season_end_month <= 12
+  ) {
+    sprintf(
+      "%s-%s",
+      month.abb[pet_window$season_start_month],
+      month.abb[pet_window$season_end_month]
+    )
+  } else {
+    "selected season"
+  }
+
+
+  mode_label <- ifelse(climate_mode_to_plot == "yearly_native", "yearly native", "seasonal monthly")
+  
+  df_pet <- left_join(median_esca |> mutate(region = case_when(
+    region == "La_Cote" ~ "La Cote",
+    region == "Nord_Vaudois" ~ "Nord Vaudois",
+    .default = region
+)), pet_summary, by = "region")
+
+  if(climate_mode_to_plot == "yearly_native")
+  {
+    start_season <- 1L
+    end_season <- 12L
+  } else
+  {
+    start_season <- pet_window$season_start_month
+    end_season <- pet_window$season_end_month
+  }
+  start_season <- ifelse(start_season <0, yes = (start_season %% 12) + 1, no = start_season) 
+  start_season_lab = month.name[start_season]
+  end_season_lab = month.name[end_season]
+  
+  xlab_pet <-  paste0("Mean seasonal P/ET ratio (",start_season_lab, " - ", end_season_lab, ")")
+  
+  pl_pet <- df_pet |>
+    ggplot(aes(x = mean_ratio_P_ET, y = median_esca, label = region)) +
+    geom_point(size = 4, colour = "steelblue") +
+    geom_text(vjust = -0.8, size = 3.5) +
+      labs(title = "P/ET ratio vs Esca incidence",
+        subtitle = paste0("Time window: ", start_season_lab, " - ", end_season_lab),
+        x = xlab_pet,
+         y = "Median Symptoms + Apoplexy (%)") +
+    theme_minimal(base_size = 11)
+} else {
+  pl_pet <- ggplot() + 
+    annotate("text", x = 0.5, y = 0.5, label = "P/ET data not available.\nRun regional_climate_characterization.R first.") +
+    theme_void()
+}
+
+# --- SeasVPD by region ---
+median_vpd <- full_data |>
+  filter(!is.na(SeasVPD), !is.na(SumSymptApo)) |>
+  group_by(region) |>
+  summarise(median_VPD = median(SeasVPD),
+            median_esca = median(SumSymptApo),
+            .groups = "drop")
+
+pl_vpd_region <- median_vpd |> mutate(region = case_when(
+    region == "La_Cote" ~ "La Cote",
+    region == "Nord_Vaudois" ~ "Nord Vaudois",
+    .default = region
+)) |> 
+  ggplot(aes(x = median_VPD, y = median_esca, label = region)) +
+  geom_point(size = 4, colour = "darkorange") +
+  geom_text(vjust = -0.8, size = 3.5) +
+  labs(title = "Seasonal VPD vs Esca incidence",
+       x = "Median seasonal VPD (kPa)",
+       y = "Median Symptoms + Apoplexy (%)") +
+  theme_minimal(base_size = 11)
+
+# --- Side by side ---
+pl_combined <- pl_pet + pl_vpd_region +
+  plot_annotation(title = paste0(
+    "Regional climate characterization vs Esca expression"
+  ))
+print(pl_combined)
+save_plot(pl_combined, paste0("regional_climate_vs_esca_", climate_mode_to_plot), width = 12, height = 5)
+```
+
+
+```{r yearly regional_climate_vs_esca, fig.height=5, fig.width=12}
+
+yearly_data <- read_csv("data/regional_climate_P_ET_yearly.csv", show_col_types = FALSE) |>
+  filter(mode == climate_mode_to_plot)
+
+df_pred <- data.frame(Ratio_P_ET =  seq(0,5, by = 0.01))
+df_pred_VPD <- data.frame(VPD_Yearly =  seq(0.5,3, by = 0.01))
+
+year_window <- yearly_data |>
+  distinct(season_start_month, season_end_month) |>
+  filter(!is.na(season_start_month), !is.na(season_end_month))
+
+season_label_year <- if (
+  nrow(year_window) == 1 &&
+    year_window$season_start_month >= 1 && year_window$season_start_month <= 12 &&
+    year_window$season_end_month >= 1 && year_window$season_end_month <= 12
+) {
+  sprintf(
+    "%s-%s",
+    month.abb[year_window$season_start_month],
+    month.abb[year_window$season_end_month]
+  )
+} else {
+  "selected season"
+}
+
+xlab_pet_year <- paste0("Mean seasonal P/ET ratio (",start_season_lab, " - ", end_season_lab, ")")
+
+
+mode_label_year <- ifelse(climate_mode_to_plot == "yearly_native", "yearly native", "seasonal monthly")
+
+
+VPD_Yearly <- full_data |> 
+  group_by(region, Year) |> 
+  summarise(VPD_Yearly = median(SeasVPD, na.rm = T), Esca_Incidence = median(SumSymptApo, na.rm = T), .groups = "drop")
+
+df_corr_regional_var <- yearly_data |> 
+  mutate(Year = factor(year)) |> 
+  left_join(VPD_Yearly |> mutate(region = case_when(
+    region == "La_Cote" ~ "La Cote",
+    region == "Nord_Vaudois" ~ "Nord Vaudois",
+    .default = region
+)), by = c("region", "Year")) |> 
+  select(Year, region, Ratio_P_ET, VPD_Yearly, Esca_Incidence) |>  
+  drop_na() |> 
+  mutate(region = factor(region, levels =levels(Esca_levels_regions$region)))
+
+qfit_VPD <- qgam(Esca_Incidence ~ s(VPD_Yearly, bs = "cs"), data = df_corr_regional_var, qu = 0.5, control = list(progress= "none"))
+df_qfit <- data.frame(VPD_Yearly = df_pred_VPD$VPD_Yearly,
+                                Esca_Incidence = predict(qfit_VPD, newdata = df_pred_VPD), 
+                                mode = "") |>
+  filter(VPD_Yearly < max(df_corr_regional_var$VPD_Yearly, na.rm = T) & VPD_Yearly > min(df_corr_regional_var$VPD_Yearly, na.rm = T) )
+
+
+
+pl_vpd_region_year <- ggplot(df_corr_regional_var, aes(x = VPD_Yearly, y =Esca_Incidence,  col = region)) + 
+  geom_point() +
+  # geom_smooth(mapping = aes(x = VPD_Yearly, y =Esca_Incidence, linewidth ="Smooth mean"), method = "gam", inherit.aes = F, col = "black", se = FALSE) +
+  scale_color_discrete("Region", palette = "Okabe-Ito") +
+  geom_line(
+    data = df_qfit,
+    aes(x = VPD_Yearly, y = Esca_Incidence, linewidth ="Smooth median"),
+    inherit.aes = FALSE,
+  ) +
+  labs(title = "", # Seasonal VPD vs Esca incidence
+       x = "Median seasonal VPD (kPa)",
+       y = "Median Symptoms + Apoplexy (%)")+
+  scale_linewidth_manual(name = " ", values = 1, breaks = "Smooth median") +
+  theme_minimal()
+
+qfit_PET <- qgam(Esca_Incidence ~ s(Ratio_P_ET, bs = "cs"), data = df_corr_regional_var, qu = 0.5, control = list(progress= "none"))
+
+
+df_qfit <- data.frame(Ratio_P_ET = df_pred$Ratio_P_ET,
+                                Esca_Incidence = predict(qfit_PET, newdata = df_pred), 
+                                mode = "") |>
+  filter(Ratio_P_ET < max(df_corr_regional_var$Ratio_P_ET, na.rm = T) & Ratio_P_ET > min(df_corr_regional_var$Ratio_P_ET, na.rm = T) )
+
+
+pl_pet_year <- ggplot(df_corr_regional_var, aes(x = Ratio_P_ET, y =Esca_Incidence,  col = region)) + 
+    geom_point()+
+    scale_color_discrete("Region", palette = "Okabe-Ito") +
+    # geom_smooth(mapping = aes(x = Ratio_P_ET, y =Esca_Incidence, linewidth ="Smooth mean"), method = "gam", inherit.aes = F, col = "black", se = FALSE) +
+    labs(title = "", # Ratio_P_ET vs Esca incidence
+  x = xlab_pet_year,
+         y = "Median Symptoms + Apoplexy (%)") +
+   geom_line(
+    data = df_qfit,
+    aes(x = Ratio_P_ET, y = Esca_Incidence, linewidth ="Smooth median"),
+    inherit.aes = FALSE,
+  ) +
+    scale_linewidth_manual(name = " ", values = 1, breaks = "Smooth median") +
+    theme_minimal()
+
+# --- Side by side ---
+pl_combined_year <- pl_pet_year + pl_vpd_region_year + 
+  plot_layout(guides = "collect") + 
+  plot_annotation(title = paste0(
+    "Regional climate characterization vs Esca expression"
+  ))
+print(pl_combined_year)
+
+
+save_plot(pl_combined_year, paste0("regional_climate_vs_esca_year_", climate_mode_to_plot), width = 12, height = 5)
+cat("correlation between P/ET ratio and seasonal VPD (", climate_mode_to_plot, "):\n", sep = "")
+cor(df_corr_regional_var$Ratio_P_ET, df_corr_regional_var$VPD_Yearly)
+```
+
+```{r comparison with trends of incidence, fig.height=7, fig.width=10}
+
+# Prepare P/ET data with numeric Year matching dat_reg2
+df_pet <- df_corr_regional_var |> 
+  mutate(Year_num = as.numeric(as.character(Year)),
+         region = factor(region, levels = levels(dat_reg2$region))) |> 
+  select(Year_num, region, Ratio_P_ET) |> 
+  drop_na(region)
+
+# Determine scaling parameters for dual axis
+# Map P/ET range to SymptApo range (0-10)
+pet_range <- range(df_pet$Ratio_P_ET, na.rm = TRUE)
+symp_max <- 10
+# linear transform: SymptApo_scale = (Ratio_P_ET - pet_min) / (pet_max - pet_min) * symp_max
+pet_min <- pet_range[1]
+pet_max <- pet_range[2]
+scale_factor <- symp_max / (pet_max - pet_min)
+offset <- pet_min
+
+# Scale P/ET to the incidence axis
+df_pet <- df_pet |> 
+  mutate(Ratio_scaled = (Ratio_P_ET - offset) * scale_factor)
+
+# Build the combined plot: incidence (left axis) + P/ET ratio (right axis)
+pl_combined <- ggplot(dat_reg2, aes(x = Year, y = SymptApo)) + 
+  geom_boxplot(mapping = aes(group = Year), outlier.alpha = 0.3) +
+  facet_wrap(~ region) +
+  geom_line(data = df.quant, 
+            aes(x = Year, y = Quant, col = "Incidence (smooth median)"),
+            linewidth = linewd) +
+  # Add P/ET ratio as scaled line
+  geom_line(data = df_pet, 
+            aes(x = Year_num, y = Ratio_scaled, col = "P/ET ratio"),
+            linewidth = linewd, linetype = "dashed") +
+  geom_point(data = df_pet,
+             aes(x = Year_num, y = Ratio_scaled, col = "P/ET ratio"),
+             size = 1.5) +
+  # Secondary axis for P/ET
+
+  scale_y_continuous(
+    name = "Symptoms + Apoplexy (%)",
+    limits = c(0, symp_max),
+    sec.axis = sec_axis(~ . / scale_factor + offset, name = "P/ET ratio")
+  ) +
+  scale_x_continuous(breaks = year.br, labels = year.lab) + 
+  scale_color_manual("", values = c("Incidence (smooth median)" = "blue", 
+                                     "P/ET ratio" = "red")) +
+  ggtitle("Esca incidence and P/ET ratio by region") +
+  xlab("Year") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        axis.title.y.right = element_text(color = "red"),
+        axis.text.y.right = element_text(color = "red"))
+
+print(pl_combined)
+save_plot(pl_combined, "incidence_vs_PET_ratio_regions", height = 7, width = 10)
+```
+
 ---
 
 
@@ -1164,14 +1492,14 @@ pl_vpd
 From the data, we can conclude that
 
 - There is **no evidence of a negative evolution of the incidence of the esca disease over the years**, not globally, nor by region.
-- There are strong regional differences, that only partially explained by the meteorological conditions. Some other factors, such as the pedology, the variety, the rootstock are certainly playing an important role that cannot be highlighted with the data at hand.
+- **At the regional level, there is some evidence that the incidence of esca is positively correlated with water availability,** drought and/or water stress inhibiting the expression of symptoms. 
+- it seems difficult to predict at the plot level the expression of the disease. There are strong regional differences, that are partially explained by the meteorological conditions. Some other factors, such as the pedology, the variety, the rootstock are certainly playing an important role that cannot be highlighted with the data at hand.
 
-Regarding the climatic variable having an influence on the expression of the esca disease:
+Regarding the climatic variable having an influence on the expression of the esca disease at the plot level:
 
-1. Results must be interpreted **with care**. The predictive power is low, and the results must be considered with care and only in comparison with other papers.  Esca expression has high inherent variability, even given meteorological data.
-2. VPD is the primary environmental driver of Esca expression. However, this being a function of both relative humidity and temperature.
-3. Water stress (VPD + precipitation + soil reserve) seems to be the "fil rouge"  across all analyses focusing on variable importance.
-4. In the monthly dataset, we observe some spurious correlations. Since the observations were all made in late August, the fact that monthly variables of September and October appear can only be an artifact. This cast doubts about the results. 
+1. Results of the predictive analysis must be interpreted **with care**. The predictive power is low, and the results must be considered with care and only in comparison with other papers.  Esca expression has high inherent variability, even given meteorological data.
+1. Water stress (VPD + precipitation) seems to be the "fil rouge"  across all analyses focusing on variable importance.
+
 
 ## Relation to the literature
 
@@ -1184,30 +1512,30 @@ The results are essentially in line with the literature.
 - Relation to Water Holding Soil Capacity not clear but **data are scarce**. Other aspects in line with [Monod et al. , 2023](https://doi.org/10.20870/oeno-one.2025.59.1.7659), while some others are not corroborated. 
 
 
->Esca incidence was correlated with precipitation, 
-particularly in May and June by our regression analyses 
-(Figure 9). Previous studies have mentioned that cool, 
-rainy summers favour the expression of esca leaf symptoms 
-(Surico et al., 2000; Marchi et al., 2006) and especially the 
-rainfall pattern from May to July (Calzarano et al., 2018b), 
-which is consistent with our results. According to our 
-observations, the years characterised by the highest rainfall 
-are those in which the incidence of esca is the highest across 
-the network of vineyards (years 2019 and 2021; Figures 4 
-and 5). Hot and dry summers are considered to favour 
-apoplexy (Surico et al., 2000; Marchi et al., 2006). The 
-appearance of apoplectic events was not linked with hot and 
-dry weather in our observations. On the contrary, the year 
-2018 was particularly hot and dry during the summer and 
-was the year with the lowest number of apoplectic events and foliar symptom rates (Figures 3 and 4). The year 2021 was 
-the wettest year with the highest number of foliar symptoms 
-and apoplectic events in three of the four viticultural regions 
-monitored. Both years 2019 and 2021 were characterised by 
-a particularly rainy and cold May, followed by a hot (2019) 
-or rainy and hot (2021) summer. These observations align 
-with earlier research, including Surico et al. (2000), which 
-proposed a relation between apoplexy and alternating periods 
-of dry, hot weather and wet, cool conditions. Such weather 
-patterns promote vigorous leaf and canopy growth, leading 
-to high evapotranspiration rates, and potentially disrupting 
-sap flow (McDowell et al., 2008)
+<!-- >Esca incidence was correlated with precipitation,  -->
+<!-- particularly in May and June by our regression analyses  -->
+<!-- (Figure 9). Previous studies have mentioned that cool,  -->
+<!-- rainy summers favour the expression of esca leaf symptoms  -->
+<!-- (Surico et al., 2000; Marchi et al., 2006) and especially the  -->
+<!-- rainfall pattern from May to July (Calzarano et al., 2018b),  -->
+<!-- which is consistent with our results. According to our  -->
+<!-- observations, the years characterised by the highest rainfall  -->
+<!-- are those in which the incidence of esca is the highest across  -->
+<!-- the network of vineyards (years 2019 and 2021; Figures 4  -->
+<!-- and 5). Hot and dry summers are considered to favour  -->
+<!-- apoplexy (Surico et al., 2000; Marchi et al., 2006). The  -->
+<!-- appearance of apoplectic events was not linked with hot and  -->
+<!-- dry weather in our observations. On the contrary, the year  -->
+<!-- 2018 was particularly hot and dry during the summer and  -->
+<!-- was the year with the lowest number of apoplectic events and foliar symptom rates (Figures 3 and 4). The year 2021 was  -->
+<!-- the wettest year with the highest number of foliar symptoms  -->
+<!-- and apoplectic events in three of the four viticultural regions  -->
+<!-- monitored. Both years 2019 and 2021 were characterised by  -->
+<!-- a particularly rainy and cold May, followed by a hot (2019)  -->
+<!-- or rainy and hot (2021) summer. These observations align  -->
+<!-- with earlier research, including Surico et al. (2000), which  -->
+<!-- proposed a relation between apoplexy and alternating periods  -->
+<!-- of dry, hot weather and wet, cool conditions. Such weather  -->
+<!-- patterns promote vigorous leaf and canopy growth, leading  -->
+<!-- to high evapotranspiration rates, and potentially disrupting  -->
+<!-- sap flow (McDowell et al., 2008) -->

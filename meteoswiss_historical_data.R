@@ -9,22 +9,16 @@
 
 # Load required libraries
 library(httr)
-# library(jsonlite)
 library(tidyverse)
-# library(dplyr)
-# library(stringr)
-# library(geosphere)
 library(sf)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(ggplot2)
 library(scales)
-# library(readr)
-# library(tidyr)
 
 # Configuration
 VITIMETEO_URL <- "https://vitimeteo.ch/api/"
-VITIMETEO_AUTH <- authenticate("ProbaStat", "math234d", type = 'basic')
+VITIMETEO_AUTH <- authenticate(Sys.getenv("VITIMETEO_USER"), Sys.getenv("VITIMETEO_PASSWORD"), type = 'basic')
 
 METEOSWISS_BASE_URL <- "https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn/"
 METEOSWISS_STATIONS_URL <- paste0(METEOSWISS_BASE_URL, "ogd-smn_meta_stations.csv")
@@ -39,6 +33,7 @@ End_date <- as.Date("2024-12-31")
 BUFFER_DISTANCE_M <- 30000
 
 source("match_API_names.R") ## creates the object station_mapping which contains the indices of the agrometeo stations of interest
+source("meteoswiss_download_funs.R") ## loads MeteoSwiss download functions
 
 cat("=============================================================================\n")
 cat("METEOSWISS HISTORICAL WEATHER DATA DOWNLOAD AND CLIMATIC NORMS DETERMINATION\n")
@@ -191,30 +186,24 @@ old_no_proxy <- Sys.getenv("no_proxy")
 Sys.setenv(no_proxy = "localhost,127.0.0.1,0.0.0.0,.evdad.admin.ch,.agsad.admin.ch,10.183.0.0/16,10.0.0.0/8")
 Sys.setenv(NO_PROXY = "localhost,127.0.0.1,0.0.0.0,.evdad.admin.ch,.agsad.admin.ch,10.183.0.0/16,10.0.0.0/8")
 
-meteoswiss_stations <- read_delim(METEOSWISS_STATIONS_URL, delim = ";", locale = locale(encoding = "latin1"))
-meteoswiss_datainventory <- read_delim(METEOSWISS_DATAINVENTORY, delim = ";", locale = locale(encoding = "latin1"))
+meteoswiss_stations <- read_delim(METEOSWISS_STATIONS_URL, delim = ";", locale = locale(encoding = "UTF-8"))
+meteoswiss_datainventory <- read_delim(METEOSWISS_DATAINVENTORY, delim = ";", locale = locale(encoding = "UTF-8"))
 # Download parameter metadata  
-meteoswiss_parameters <- read_delim(METEOSWISS_PARAMETERS_URL, delim = ";", locale = locale(encoding = "latin1"))
+meteoswiss_parameters <- read_delim(METEOSWISS_PARAMETERS_URL, delim = ";", locale = locale(encoding = "UTF-8"))
 
 # Restore original no_proxy
 Sys.setenv(no_proxy = old_no_proxy)
 Sys.setenv(NO_PROXY = old_no_proxy)
 
-# Filter for daily resolution parameters
-daily_params <- meteoswiss_parameters |>
-  pull(parameter_description_en) |> 
-  grep(pattern = "daily"  , x =_, ignore.case = T, value = T) 
-
+# Filter for monthly resolution parameters
 monthly_params <- meteoswiss_parameters |>
   pull(parameter_description_en) |> 
   grep(pattern = "monthly"  , x =_, ignore.case = T, value = T) 
 
 target_desc <- grep(pattern = "Precipitation; monthly total|Air temperature 2 m above ground; monthly mean|Relative air humidity 2 m above ground; monthly mean|Atmospheric pressure at barometric|Global radiation; monthly mean|Reference evaporation from FAO; monthly total", x = monthly_params, value = T)
-# target_desc <- grep(pattern = "Precipitation; daily total 0 UTC - 0 UTC|Air temperature 2 m above ground; daily mean|Relative air humidity 2 m above ground; daily mean|Atmospheric pressure at barometric altitude|Global radiation; daily mean|Reference evaporation from FAO; daily total", x = daily_params, value = T)
 
 
 
-# desc <- data.frame(target_desc = c("Precipitation; daily total 0 UTC - 0 UTC","Air temperature 2 m above ground; daily mean", "Relative air humidity 2 m above ground; daily mean", "Atmospheric pressure at barometric altitude (QFE); daily mean", "Global radiation; daily mean", "Reference evaporation from FAO; daily total"), short_desc =c("Precipitation", "Temperature", "Humidity","Pressure", "Radiation", "Evapotranspiration" )) 
 desc <- data.frame(target_desc = c("Precipitation; monthly total", "Air temperature 2 m above ground; monthly mean", 
                                    "Relative air humidity 2 m above ground; monthly mean","Atmospheric pressure at barometric altitude (QFE); monthly mean",
  "Global radiation; monthly mean", "Reference evaporation from FAO; monthly total"),
@@ -310,7 +299,7 @@ complete_map +
            label = "MeteoSwiss", hjust = 0, size = 3, color = "darkgreen")
 
 # Optional: Save the map
-ggsave("figures/weather_stations_map.png", width = 12, height = 8, dpi = 300)
+ggsave("plots/weather_stations_map.png", width = 12, height = 8, dpi = 300)
 
 
 # =============================================================================
