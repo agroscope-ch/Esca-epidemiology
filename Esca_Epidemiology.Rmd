@@ -216,7 +216,6 @@ save_plot(pl, "prop_evolution_SympApo")
 save_widget(ggplotly(pl), "prop_evolution_SympApo")
 ```
 
-<!-- Next, we look at the symptoms: -->
 
 ```{r evolution_symptoms, eval=FALSE}
 qfit <- qgam(percentage_symptoms ~ s(Year), qu = .5,
@@ -295,7 +294,6 @@ df.quant <- left_join(df.quant, Esca |>
 
 
 df.quant <- cbind.data.frame(df.quant, Quant = predict(object = qfit, newdata = df.quant))
-# df.quant <- dat_reg2 |> mutate(Quant = predict(qfit))
 
 pl <- ggplot(dat_reg2, aes(x = Year, y = SymptApo)) + 
   geom_boxplot(mapping = aes(group = Year), outlier.alpha = 0.3) +
@@ -413,8 +411,6 @@ if (maps_available) {
     Esca <- Esca |> mutate(E_lv95 = E, N_lv95 = N)
   }
   
-  # year_plot <- sort(unique(Esca$Year))
-  # year_plot <- year_plot[seq(3, length(year_plot), by = 3)]
   year_plot <- c(2001, 2012, 2022)
   for (yr in year_plot) {
     Esca_plt <- Esca |> 
@@ -569,9 +565,6 @@ monthly_vars <- c(
   paste0("VPD_", month_labels)
 )
 
-# Add contrast variable
-monthly_vars <- c(monthly_vars, "Contrast_MayJune_VPD")
-
 # Keep only columns that exist in the data
 monthly_vars <- intersect(monthly_vars, names(corr_data))
 monthly_cols <- c("SumSymptApo", monthly_vars)
@@ -616,10 +609,10 @@ save_plot(pl_corr_monthly, "corr_spearman_monthly", height = 5, width = 9)
 ### Seasonal variables
 
 ```{r corr_seasonal, fig.height=5, fig.width=7}
-# Select seasonal aggregate columns + contrast variable
+# Select seasonal aggregate columns 
 seasonal_vars <- c("SeasVPD", "SeasTemp", "SeasPrecipitation", "SeasPressure",
                    "SeasHumidity", "SeasRadiation", "SeasEvapotranspiration", 
-                   "Contrast_MayJune_VPD", "RU_nb")
+                   "RU_nb")
 seasonal_vars <- intersect(seasonal_vars, names(corr_data))
 seasonal_cols <- c("SumSymptApo", seasonal_vars)
 
@@ -680,7 +673,6 @@ if (!ford_available && !ford_seasonal_available) {
 ```{r ford_monthly_results}
 if (ford_available) {
   ford_df <- read_csv(ford_file, show_col_types = FALSE)
-  # cat("FORD selected **", nrow(ford_df), "** variables as statistically significant predictors (monthly mode):\n\n")
   kable(ford_df, digits = 3,
         caption = "Variables selected by FORD -- monthly climate variables (ordered by selection step)")
 } else {
@@ -741,13 +733,6 @@ With **seasonal** aggregates (~7 predictors), FORD selects **SeasPrecipitation**
 
 Overall, the model-free FORD ranking points to a compact climate signal centered on atmospheric dryness (monthly VPD) and broad seasonal hydro-climatic context (precipitation and temperature). This is consistent with the predictive variable-importance analysis in the next section, where precipitation and VPD-related variables are among the most informative predictors.
 
-#### Testing the "cold-wet → hot-dry" transition hypothesis
-
-It has been suggested in the literature that Esca expression is linked to abrupt transitions from cold-wet to hot-dry conditions, particularly between May and June (Bortolami et al., *PNAS*, 2021). To challenge this hypothesis, we introduced a contrast variable:
-
-- **`Contrast_MayJune_VPD`** = VPD~June~ − VPD~May~ — captures the abrupt shift in atmospheric water demand between May and June. A large positive value indicates a rapid transition from cool/humid to hot/dry conditions.
-
-This variable is included in both the monthly and seasonal FORD analyses. If the hypothesis holds, FORD should detect this contrast as a significant predictor of Esca expression. The Spearman correlations in the preceding section provide an initial assessment of the strength and direction of this association.
 
 ### Algorithm description
 
@@ -1150,11 +1135,6 @@ In both aggregation modes, **VPD** (Vapour Pressure Deficit) emerges as the most
 ## Esca Expression vs Seasonal VPD
 
 ```{r loading data, include=FALSE, echo=FALSE}
-
-# # Load the full dataset with merged weather (includes VPD)
-# source("esca_ml_config.R")
-# source("esca_ml_pipeline.R")
-
 full_data <- load_esca_data(config = config_full_dataset())
 ```
 
@@ -1492,42 +1472,3 @@ Regarding the climatic variable having an influence on the expression of the esc
 1. Results of the predictive analysis must be interpreted **with care**. The predictive power is low, and the results must be considered with care and only in comparison with other papers.  Esca expression has high inherent variability, even given meteorological data.
 1. Water stress (VPD + precipitation) seems to be the "fil rouge"  across all analyses focusing on variable importance.
 
-
-## Relation to the literature
-
-The results are essentially in line with the literature. 
-
-
-- High VPD -> less esca. In line with [Bortolami et al. (PNAS, 2021)](https://doi.org/10.1073/pnas.2112825118)
-- Correlations similar to those described in [F. Calzarano et al. (Phytopathologia Mediterranea, 2018)]
-(https://doi.org/10.14601/Phytopathol_Mediterr-23787)
-- Relation to Water Holding Soil Capacity not clear but **data are scarce**. Other aspects in line with [Monod et al. , 2023](https://doi.org/10.20870/oeno-one.2025.59.1.7659), while some others are not corroborated. 
-
-
-<!-- >Esca incidence was correlated with precipitation,  -->
-<!-- particularly in May and June by our regression analyses  -->
-<!-- (Figure 9). Previous studies have mentioned that cool,  -->
-<!-- rainy summers favour the expression of esca leaf symptoms  -->
-<!-- (Surico et al., 2000; Marchi et al., 2006) and especially the  -->
-<!-- rainfall pattern from May to July (Calzarano et al., 2018b),  -->
-<!-- which is consistent with our results. According to our  -->
-<!-- observations, the years characterised by the highest rainfall  -->
-<!-- are those in which the incidence of esca is the highest across  -->
-<!-- the network of vineyards (years 2019 and 2021; Figures 4  -->
-<!-- and 5). Hot and dry summers are considered to favour  -->
-<!-- apoplexy (Surico et al., 2000; Marchi et al., 2006). The  -->
-<!-- appearance of apoplectic events was not linked with hot and  -->
-<!-- dry weather in our observations. On the contrary, the year  -->
-<!-- 2018 was particularly hot and dry during the summer and  -->
-<!-- was the year with the lowest number of apoplectic events and foliar symptom rates (Figures 3 and 4). The year 2021 was  -->
-<!-- the wettest year with the highest number of foliar symptoms  -->
-<!-- and apoplectic events in three of the four viticultural regions  -->
-<!-- monitored. Both years 2019 and 2021 were characterised by  -->
-<!-- a particularly rainy and cold May, followed by a hot (2019)  -->
-<!-- or rainy and hot (2021) summer. These observations align  -->
-<!-- with earlier research, including Surico et al. (2000), which  -->
-<!-- proposed a relation between apoplexy and alternating periods  -->
-<!-- of dry, hot weather and wet, cool conditions. Such weather  -->
-<!-- patterns promote vigorous leaf and canopy growth, leading  -->
-<!-- to high evapotranspiration rates, and potentially disrupting  -->
-<!-- sap flow (McDowell et al., 2008) -->
