@@ -424,14 +424,6 @@ if (maps_available) {
     pl_SymptApo <- maps_year_Zoom_Altitude(
         data = Esca_plt |> rename(z = SymptApo),
         lab_scale = "Symptoms + apoplexy (%)")
-    # pl_apo <- maps_year_Zoom_Altitude(
-    #   data = Esca_plt |> rename(z = percentage_apoplexy), 
-    #   lab_scale = "apoplexy (%)")
-    # pl_sympt <- maps_year_Zoom_Altitude(
-    #   data = Esca_plt |> rename(z = percentage_symptoms), 
-    #   lab_scale = "symptoms (%)")
-    
-    # combined <- pl_apo / pl_sympt + 
     combined <- pl_SymptApo +
           plot_annotation(title = paste0("Apoplexy and symptoms, ", yr))
     print(combined)
@@ -743,11 +735,11 @@ if (ford_seasonal_available && exists("ford_df_seasonal") && nrow(ford_df_season
 
 #### Interpretation
 
-With **monthly** climate variables (~56 predictors), FORD identifies **VPD in July** and **Humidity in June** as the only two variables with a statistically significant signal beyond random noise.
+With **monthly** climate variables (~56 predictors), FORD identifies **VPD in July** as the only variable with a statistically significant signal beyond random noise.
 
-With **seasonal** aggregates (~7 predictors), FORD selects **SeasVPD** (seasonal mean of maximum daily VPD) as the sole significant variable. This is consistent: VPD in July is the dominant monthly contributor to the seasonal VPD aggregate.
+With **seasonal** aggregates (~7 predictors), FORD selects **SeasPrecipitation** first and then **SeasTemp**.
 
-In both cases, VPD-related variables emerge as the strongest model-free signal, confirming the model-based importance rankings (see below) where VPD and humidity-related variables consistently appear among the top predictors.
+Overall, the model-free FORD ranking points to a compact climate signal centered on atmospheric dryness (monthly VPD) and broad seasonal hydro-climatic context (precipitation and temperature). This is consistent with the predictive variable-importance analysis in the next section, where precipitation and VPD-related variables are among the most informative predictors.
 
 #### Testing the "cold-wet → hot-dry" transition hypothesis
 
@@ -759,7 +751,7 @@ This variable is included in both the monthly and seasonal FORD analyses. If the
 
 ### Algorithm description
 
-**FORD** (Feature Ordering by Integrated $R^2$ Dependence is a model-agnostic variable selection algorithm that identifies statistically significant predictors without relying on any specific model or assumptions. See the reference for more details.  
+**FORD** (Feature Ordering by Integrated $R^2$ Dependence) is a model-agnostic variable selection algorithm that identifies statistically significant predictors without relying on any specific model or assumptions. See the reference for more details.  
 
 The method works by comparing each variable's conditional dependence with the response. Variables are selected sequentially: at each step, the variable most associated with the response is chosen, and the procedure stops when no remaining variable are positively associated in the sense of the integrated $R^2$ measure.
 

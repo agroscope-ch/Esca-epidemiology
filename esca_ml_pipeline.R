@@ -141,6 +141,26 @@ load_MeteoSwiss_data <- function() {
   return(meteoswiss_df)
 }
 
+#' Load standardized RU soil data
+#' @param path Path to standardized RU CSV file
+#' @return Tibble with columns plot, RU (mm), RU_nb
+load_ru_data <- function(path = "data/RU_data.csv") {
+  cat("Loading soil data...\n")
+
+  ru_data <- read_csv(path, show_col_types = FALSE)
+
+  required_cols <- c("plot", "RU (mm)", "RU_nb")
+  missing_cols <- setdiff(required_cols, names(ru_data))
+
+  if (length(missing_cols) > 0) {
+    stop("RU data is missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  ru_data |>
+    mutate(RU_nb = suppressWarnings(as.numeric(RU_nb))) |>
+    select(all_of(required_cols))
+}
+
 # =============================================================================
 # MERGED WEATHER DATA (VITIMETEO-FIRST WITH METEOSWISS FALLBACK)
 # =============================================================================
@@ -469,21 +489,7 @@ load_esca_data <- function(config, data_subset = NULL) {
     merged_weather <- load_merged_weather_data(config)
     
     # Load soil data
-    cat("Loading soil data...\n")
-    soil_data <- read_excel("data/Esca et RU des sols Vivian.xlsx") |>
-      mutate(RU_nb = case_when(
-        is.na(`RU (mm)`) ~ NA_real_,
-        `RU (mm)` == "150-200" ~ 175,
-        `RU (mm)` == "100-150" ~ 125,
-        `RU (mm)` == "<100" ~ 50,
-        `RU (mm)` == "120" ~ 120,
-        `RU (mm)` == "100" ~ 100,
-        `RU (mm)` == "150" ~ 150,
-        `RU (mm)` == "200" ~ 200,
-        `RU (mm)` == "125" ~ 125,
-        `RU (mm)` == "180" ~ 180,
-        .default = NA_real_
-      ))
+    soil_data <- load_ru_data()
     
     # Combine esca data with soil and merged weather
     cat("Combining datasets...\n")
@@ -597,21 +603,7 @@ load_esca_data <- function(config, data_subset = NULL) {
   }
   
   # Load soil data
-  cat("Loading soil data...\n")
-  soil_data <- read_excel("data/Esca et RU des sols Vivian.xlsx") |>
-    mutate(RU_nb = case_when(
-      is.na(`RU (mm)`) ~ NA_real_,
-      `RU (mm)` == "150-200" ~ 175,
-      `RU (mm)` == "100-150" ~ 125,
-      `RU (mm)` == "<100" ~ 50,
-      `RU (mm)` == "120" ~ 120,
-      `RU (mm)` == "100" ~ 100,
-      `RU (mm)` == "150" ~ 150,
-      `RU (mm)` == "200" ~ 200,
-      `RU (mm)` == "125" ~ 125,
-      `RU (mm)` == "180" ~ 180,
-      .default = NA_real_
-    ))
+  soil_data <- load_ru_data()
 
   # Combine datasets
   cat("Combining datasets...\n")

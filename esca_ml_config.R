@@ -336,7 +336,7 @@ validate_config <- function(config) {
     "data/plot_meteoswiss_associations.csv",
     "data/plot_station_associations.csv",
     "data/weather_data_Agrometeo_Esca_plots_monthly.csv",
-    "data/Esca et RU des sols Vivian.xlsx"
+    "data/RU_data.csv"
   )
   
   missing_files <- required_files[!file.exists(required_files)]
