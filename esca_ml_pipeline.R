@@ -1414,7 +1414,6 @@ run_esca_ml_pipeline <- function(data_subset = NULL,
   # Create output directories
   if (save_results) {
     dir.create(config$output$results_dir, showWarnings = FALSE, recursive = TRUE)
-    dir.create(config$output$figures_dir, showWarnings = FALSE, recursive = TRUE)
   }
   
   # Step 1: Load and prepare data
