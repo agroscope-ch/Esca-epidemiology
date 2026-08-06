@@ -60,7 +60,8 @@ The data has been loaded and preprocessed in a previous document. It consists of
 
 
 ```{r load_data}
-Esca <- read.table(file = "data/Esca_CH_2001-2022.csv", header = TRUE, sep = ",", 
+# 
+Esca <- read.table(file = "https://zenodo.org/records/21704548/files/Esca_CH_2001-2022.csv?download=1", header = TRUE, sep = ",", 
                    dec = ".", na = "", stringsAsFactors = TRUE) |> 
   mutate(variety = gsub(x = variety, pattern = "_", replacement = " "),
          region = gsub(x = region, pattern = "_", replacement = " ")) |> 

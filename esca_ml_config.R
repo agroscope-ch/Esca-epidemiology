@@ -331,7 +331,6 @@ validate_config <- function(config) {
   
   # Check data paths
   required_files <- c(
-    "data/Esca_CH_2001-2022.csv",
     "data/meteoswiss_weather_data_1995_2024.csv", 
     "data/plot_meteoswiss_associations.csv",
     "data/plot_station_associations.csv",

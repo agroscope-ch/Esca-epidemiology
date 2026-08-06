@@ -479,7 +479,7 @@ load_esca_data <- function(config, data_subset = NULL) {
   
   # Load primary datasets
   cat("Loading Esca disease data...\n")
-  esca_data <- read_csv("data/Esca_CH_2001-2022.csv", 
+  esca_data <- read_csv("https://zenodo.org/records/21704548/files/Esca_CH_2001-2022.csv?download=1", 
                         locale = locale(encoding = "latin1"),
                         show_col_types = FALSE) |> 
     mutate(SumSymptApo = percentage_apoplexy + percentage_symptoms)
