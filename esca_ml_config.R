@@ -211,7 +211,7 @@ create_esca_config <- function(filter_variety = NULL,
     # Output configuration
     output = list(
       results_dir = "results",
-      figures_dir = "figures",
+      figures_dir = "plots",
       save_models = TRUE,
       save_predictions = TRUE,
       save_importance = TRUE
