@@ -65,7 +65,7 @@ for (cfg in configs) {
   
   # Set output directory per configuration
   cfg$config$output$results_dir <- file.path("results", cfg$name)
-  cfg$config$output$figures_dir <- file.path("figures", cfg$name)
+  cfg$config$output$figures_dir <- file.path("plots", cfg$name)
   
   tryCatch({
     result <- run_esca_ml_pipeline(config = cfg$config, save_results = TRUE)
