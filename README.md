@@ -26,12 +26,12 @@ This reproduces the main performance tables, variable-importance rankings, and F
 
 ## Repository Structure
 
+Once the different scripts have been run, the structure of the folder is the following: 
+
 ```
 ├── data/                       # Tracked input data (disease, weather, soil, climate)
 ├── results/                    # ML pipeline outputs per configuration
-├── figures/                    # Generated figures
-├── plots/                      # Report-generated plots
-└── archive_scripts/            # Old / exploratory / test scripts
+└── plots/                      # Report-generated plots
 ```
 
 ### Core Analysis Scripts
@@ -60,7 +60,6 @@ All files below are tracked in the repository — no external download is needed
 
 | File | Description |
 |---|---|
-| `data/Esca_CH_2001-2022.csv` | Preprocessed Esca surveillance data (2001–2022) |
 | `data/RU_data.csv` | Soil water reserve capacity per plot |
 | `data/plot_station_associations.csv` | Plot ↔ Vitimeteo station spatial associations |
 | `data/plot_meteoswiss_associations.csv` | Plot ↔ MeteoSwiss station spatial associations |
@@ -87,7 +86,7 @@ The report (`Esca_Epidemiology.Rmd`) reads outputs produced by steps 1 and 2:
 ```
 run_all_configurations.R
  ├── sources: esca_ml_config.R, esca_ml_pipeline.R
- ├── reads:   data/Esca_CH_2001-2022.csv, data/RU_data.csv,
+ ├── reads:   Esca_CH_2001-2022.csv (on Zenodo), data/RU_data.csv,
  │            data/plot_station_associations.csv, data/plot_meteoswiss_associations.csv,
  │            data/weather_data_Agrometeo_Esca_plots_monthly.csv,
  │            data/meteoswiss_weather_data_1995_2024.csv,
@@ -102,7 +101,7 @@ ford_analysis.R
               results/ford_variable_selection_seasonal.csv
 
 Esca_Epidemiology.Rmd
- ├── reads:   data/Esca_CH_2001-2022.csv,
+ ├── reads:   Esca_CH_2001-2022.csv (on Zenodo),
  │            results/combined_performance_summary.csv,
  │            results/combined_variable_importance.csv,
  │            results/ford_variable_selection*.csv
@@ -144,8 +143,8 @@ If absent, map chunks in `Esca_Epidemiology.Rmd` fall back gracefully and the re
 
 ## R Package Dependencies
 
-**Core**: tidymodels, tidyverse, readxl, lubridate, xgboost, ranger, glmnet, vip, finetune, doParallel
-**Utilities**: corrplot, probably, httr, data.table
+- **Core**: `tidymodels`, `tidyverse`, `readxl`, `lubridate`, `xgboost`, `ranger`, `glmnet`, `vip`, `finetune`, `doParallel`
+- **Utilities**: `corrplot`, `probably`, `httr`, `data.table`
 
 ---
 
