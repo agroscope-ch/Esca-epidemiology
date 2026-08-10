@@ -13,6 +13,8 @@ Note that the original data set is hosted on Zenodo:
 https://zenodo.org/records/21704548
 ``
 
+and that a description of the variables is available both on Zenodo and in the file [description dataset.md](description_dataset.md)
+
 Run the three steps below from the repository root in an R session:
 
 ```r
