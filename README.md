@@ -1,11 +1,17 @@
 # Esca Epidemiology — Supplementary Material
 
 > Supplementary analysis code for the Esca epidemiology paper.
-> Reproduces the machine-learning analyses, FORD variable selection, and manuscript report from the tracked data in this repository.
+> Reproduces the machine-learning analyses, FORD variable selection, and manuscript report from the data in this repository, using a data set hosted on Zenodo.
 
 ---
 
 ## Quick Start
+
+Note that the original data set is hosted on Zenodo:
+
+``
+https://zenodo.org/records/21704548
+``
 
 Run the three steps below from the repository root in an R session:
 
