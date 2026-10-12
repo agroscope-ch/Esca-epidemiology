@@ -24,6 +24,7 @@ library(kableExtra)
 library(sf)
 
 # --- Figure export setup ---
+paper_plots <- list()   # filled by save_plot(), used for the paper figures
 dir.create("plots", showWarnings = FALSE)
 
 # Centralised figure saving function.
@@ -37,6 +38,9 @@ save_plot <- function(plot, filename,
     fpath <- file.path(dir, paste0(filename, ".", e))
     ggsave(fpath, plot = plot, width = width, height = height, dpi = dpi)
   }
+  # Keep the plot object in memory: the paper figures (section "Figures for the
+  # paper") are fine-tuned from these objects, without reading any file back.
+  paper_plots[[filename]] <<- plot
   invisible(plot)
 }
 
@@ -60,9 +64,15 @@ The data has been loaded and preprocessed in a previous document. It consists of
 
 
 ```{r load_data}
-# 
-Esca <- read.table(file = "https://zenodo.org/records/21704548/files/Esca_CH_2001-2022.csv?download=1", header = TRUE, sep = ",", 
-                   dec = ".", na = "", stringsAsFactors = TRUE) |> 
+# Published dataset (Zenodo); falls back to a local copy in data/ if Zenodo cannot be reached
+esca_url  <- "https://zenodo.org/records/21704548/files/Esca_CH_2001-2022.csv?download=1"
+esca_file <- "data/Esca_CH_2001-2022.csv"
+read_esca <- function(f) read.table(file = f, header = TRUE, sep = ",", dec = ".", na = "", stringsAsFactors = TRUE)
+Esca <- tryCatch(read_esca(esca_url), error = function(e) {
+  if (!file.exists(esca_file)) stop("Zenodo not reachable and no local copy in ", esca_file, call. = FALSE)
+  message("Zenodo not reachable: using the local copy ", esca_file)
+  read_esca(esca_file)
+}) |> 
   mutate(variety = gsub(x = variety, pattern = "_", replacement = " "),
          region = gsub(x = region, pattern = "_", replacement = " ")) |> 
   mutate(`Grouped variety` = if_else(variety %in% c("chasselas", "gamay", "pinot noir"), 
@@ -1456,6 +1466,281 @@ pl_combined <- ggplot(dat_reg2, aes(x = Year, y = SymptApo)) +
 print(pl_combined)
 save_plot(pl_combined, "incidence_vs_PET_ratio_regions", height = 7, width = 10)
 ```
+
+## Figures for the paper
+
+Final versions of the figures of the paper (`Esca_epidemiologie`): the figures above are
+taken from the objects stored by `save_plot()`, merged into composite figures where needed,
+restyled (fonts, colours, no titles) and written to `plots/paper/` (PDF, PNG, TIFF), sized
+for an A4 page with 2.54 cm margins. The chunk displays nothing; the figures are the files.
+The suggested captions are kept as comments after each figure.
+
+```{r paper_figures, fig.show='hide'}
+# --- Mapping paper figure -> plot file -> producing chunk -------------------
+# Fig 2   samples_year_variety                   Esca_Epidemiology.Rmd, chunk sample_by_year
+# Fig 3   samples_year_region                    Esca_Epidemiology.Rmd, chunk sample_by_year
+# Fig 4   prop_evolution_SympApo                 chunk evolution_symptapo
+# Fig 5   prop_evolution_symptApo_regions        chunk evo_region_symptapo
+# Fig 6a  ford_variable_selection_monthly        chunk ford_plot_monthly
+# Fig 6b  ford_variable_selection_seasonal       chunk ford_plot_seasonal
+# Fig 7   ml_mae_comparison                      chunk mae_comparison
+# Fig 8   combined_vimp_comparison               chunk combined_vimp_comparison
+# Fig 9a  regional_climate_vs_esca_year_seasonal_monthly
+#                                                chunk yearly regional_climate_vs_esca
+#                                                (climate_mode_to_plot = "seasonal_monthly")
+
+paper_figures <- c(
+  fig2  = "samples_year_variety",
+  fig3  = "samples_year_region",
+  fig4  = "prop_evolution_SympApo",
+  fig5  = "prop_evolution_symptApo_regions",
+  fig6a = "ford_variable_selection_monthly",
+  fig6b = "ford_variable_selection_seasonal",
+  fig7  = "ml_mae_comparison",
+  fig8  = "combined_vimp_comparison",
+  fig9a = "regional_climate_vs_esca_year_seasonal_monthly"
+)
+
+# Plots registered by save_plot() in the chunks above (no file is read back)
+stopifnot("run the chunks producing the paper figures first" =
+            all(paper_figures %in% names(paper_plots)))
+plots <- lapply(paper_figures, function(n) paper_plots[[n]])   # e.g. plots$fig4 + theme(...)
+
+# --- Global style (edit once, applies to every figure) ----------------------
+base_size   <- 8          # font size in pt
+font_family <- "sans"     # e.g. "Arial", "Helvetica"
+text_colour <- "black"
+paper_theme <- theme(
+  text         = element_text(size = base_size, family = font_family, colour = text_colour),
+  axis.text    = element_text(size = base_size - 1, colour = text_colour),
+  plot.title   = element_text(size = base_size + 2, face = "bold"),
+  legend.text  = element_text(size = base_size - 1),
+  strip.text   = element_text(size = base_size)
+)
+
+# Page geometry of the paper (A4, single column). Margins of the docx file itself
+# are 2.0 cm left/right (1134 twips); 2.54 cm is used here as requested.
+page_w_mm   <- 210
+page_h_mm   <- 297
+margin_mm   <- 25.4
+text_w_mm   <- page_w_mm - 2 * margin_mm   # 159.2 mm: full-width figure
+text_h_mm   <- page_h_mm - 2 * margin_mm   # 246.2 mm: max height incl. caption
+half_w_mm   <- (text_w_mm - 5) / 2         # 77.1 mm: two figures side by side
+
+# Final export: width/height in mm. Default width = full text width of the page.
+save_paper_fig <- function(plot, name, width_mm = text_w_mm, height_mm = 100,
+                           dir = "plots/paper", ext = c("pdf", "png", "tiff"), dpi = 600) {
+  stopifnot(width_mm <= text_w_mm + 1e-6, height_mm <= text_h_mm)
+  dir.create(dir, showWarnings = FALSE, recursive = TRUE)
+  for (e in ext) {
+    ggsave(file.path(dir, paste0(name, ".", e)), plot = plot,
+           width = width_mm, height = height_mm, units = "mm", dpi = dpi,
+           device = if (e == "pdf") cairo_pdf else NULL)
+  }
+  invisible(plot)
+}
+
+# --- Fig 2 + 3 merged: sample distribution by variety (a) and region (b) ---
+# The two panels use different fill scales (variety / region), so the legends cannot
+# be truly merged: guides = "collect" puts them in one column on the right, and
+# both panels keep the same width (aligned x axes).
+legend_theme <- theme(
+  legend.key.size = unit(3.5, "mm"),
+  legend.spacing.y = unit(1, "mm"),
+  legend.title = element_text(face = "bold"),
+  legend.box.spacing = unit(2, "mm")
+)
+cap_first <- function(x) paste0(toupper(substr(x, 1, 1)), substring(x, 2))
+fig2_3 <- (plots$fig2 + labs(title = NULL, subtitle = NULL, fill = "Variety", x = NULL) +
+             scale_fill_discrete(labels = cap_first) +
+             theme(axis.text.x = element_blank())) /          # years shown once, on (b)
+          (plots$fig3 + labs(title = NULL, subtitle = NULL, fill = "Region") +
+             theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))) +
+  plot_layout(guides = "collect", heights = c(1, 1)) +
+  plot_annotation(tag_levels = "a") &
+  paper_theme & legend_theme
+fig2_3
+save_paper_fig(fig2_3, "Fig2_3", height_mm = 110)
+
+# Suggested caption:
+# Figure 2. Number of plots sampled per year (a) by grape variety and (b) by
+# viticultural region. Chasselas and the La Cote region dominate the sample.
+
+# --- Fig 1: map of the Esca plots (one point per plot, coloured by region) --
+# Needs the map objects loaded by the `maps` chunk (SwissBound_crop, SwissWaters_crop,
+# LV95 coordinates E_lv95/N_lv95 added to Esca there). Weather stations are not shown;
+# title/subtitle removed (see the figure caption).
+if (exists("maps_available") && maps_available) {
+esca_plot_sf <- Esca |>
+  drop_na(E_lv95, N_lv95) |>
+  group_by(plot, region) |>
+  summarise(E = median(E_lv95), N = median(N_lv95), .groups = "drop") |>
+  st_as_sf(coords = c("E", "N"), crs = 2056)
+fig1_nostations <- ggplot(SwissBound_crop) +
+  geom_sf(alpha = 0.3) +
+  geom_sf(data = SwissWaters_crop, col = "lightskyblue3", fill = "lightskyblue1") +
+  geom_sf(data = esca_plot_sf, aes(colour = as.character(region)), alpha = 0.55, size = 1.7) +
+  scale_colour_discrete(name = NULL) +
+  theme_minimal() +
+  theme(axis.title = element_blank(), axis.text = element_blank(),
+        axis.ticks = element_blank(), panel.grid = element_blank())
+fig1_nostations <- fig1_nostations +
+  guides(colour = guide_legend(override.aes = list(size = 2.2))) +
+  theme(
+    legend.text        = element_text(size = base_size - 1),
+    legend.key.size    = unit(3.5, "mm"),
+    legend.key.spacing.y = unit(0.5, "mm"),
+    legend.margin      = margin(0, 0, 0, 0),
+    legend.box.spacing = unit(0, "mm"),   # gap between map and legend
+    legend.box.margin  = margin(0, 0, 0, 0),
+    legend.justification = "left",
+    plot.margin        = margin(2, 2, 2, 2, "mm")
+  )
+fig1_nostations
+# The map has a fixed aspect ratio, so any extra width ends up as blank space around
+# the panel (incl. between map and legend). Choose the height so the map fills the width:
+# panel width = text_w_mm - legend column (~26 mm incl. margins); height from the map aspect.
+bb <- st_bbox(SwissBound_crop)
+map_aspect <- unname((bb["ymax"] - bb["ymin"]) / (bb["xmax"] - bb["xmin"]))
+save_paper_fig(fig1_nostations, "Fig1_map_plots_only",
+               height_mm = (text_w_mm - 26) * map_aspect + 4)
+}
+
+# Suggested caption:
+# Figure 1. Studied regions: location of the Esca monitoring plots, coloured by
+# viticultural region.
+
+# --- Fig 4 + 5 merged: esca incidence over the years, all plots (a) / by region (b) ---
+# Legend (smooth mean / median) and titles removed: colours are explained in the caption.
+fig4_5 <- (plots$fig4 + labs(title = NULL) + guides(colour = "none") +
+             theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))) /
+          (plots$fig5 + labs(title = NULL) + guides(colour = "none") +
+             scale_x_continuous(breaks = c(2001, 2004, 2008, 2012, 2016, 2020, 2022)) +  # fewer labels in small facets
+             theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))) +
+  plot_layout(heights = c(1, 1.6)) +
+  plot_annotation(tag_levels = "a") &
+  paper_theme
+fig4_5
+save_paper_fig(fig4_5, "Fig4_5", height_mm = 200)
+
+# Caption:
+# Figure 3. Temporal evolution of esca incidence, expressed as the percentage of vine
+# stocks with foliar symptoms or apoplexy per plot, (a) for all plots and (b) by
+# viticultural region. Boxplots show the distribution of plot incidences in each
+# survey year (median, interquartile range, whiskers at 1.5 x IQR; points = outliers).
+# Red lines: smooth mean (loess); blue lines: smooth median (quantile GAM). In (b) the
+# y axis is truncated at 10% for readability, so some extreme values are not shown.
+
+# --- Fig 6 merged: FORD selected variables, monthly (a) / seasonal (b) -------
+# Same x scale in both panels; panel heights proportional to the number of bars
+# (1 vs 2) so that bars have the same thickness. x axis title/labels only on (b).
+ford_xlim <- c(0, 0.35)
+fig6 <- (plots$fig6a + labs(title = NULL, subtitle = NULL, x = NULL, y = NULL) +
+           scale_y_continuous(limits = ford_xlim, expand = c(0, 0)) +
+           theme(axis.text.x = element_blank())) /
+        (plots$fig6b + labs(title = NULL, subtitle = NULL, x = NULL,
+                            y = expression("Step " * nu * " (test statistic)")) +
+           scale_y_continuous(limits = ford_xlim, expand = c(0, 0))) +
+  plot_layout(heights = c(1, 2)) +
+  plot_annotation(tag_levels = "a") &
+  paper_theme
+fig6
+save_paper_fig(fig6, "Fig6", height_mm = 60)
+
+# Caption:
+# Figure 4. Variables selected by the FORD algorithm, (a) among the monthly climate
+# variables and (b) among the seasonal aggregates. Bars show the test statistic
+# (step ν) at each selection step; variables are listed from top to bottom in the order
+# of selection. Only variables with a statistically significant signal beyond random
+# noise are retained: VPD in July for the monthly dataset, and seasonal precipitation
+# followed by seasonal temperature for the seasonal dataset.
+
+# --- Fig 7: test-set MAE by model and configuration -------------------------
+# - titles removed (the dashed red line is explained in the caption)
+# - readable model labels, black and bold, shown once (left column only):
+#   the y scale is now fixed across facets instead of "free_y" (same 3 models everywhere)
+model_labels <- c(random_forest     = "Random\nforest",
+                  gradient_boosting = "Gradient\nboosting",
+                  lasso             = "LASSO")
+# short publication-friendly panel titles (no wrapping); right column = seasonal
+config_label <- function(x) {
+  x <- sub(" (Seasonal Agg)", ", seasonal", x, fixed = TRUE)
+  x <- sub(", Seasonal Agg)", "), seasonal", x, fixed = TRUE)
+  x <- sub("Chasselas Only", "Chasselas only", x, fixed = TRUE)
+  x <- sub("Exclude Sauvignon Blanc", "Sauvignon blanc excluded", x, fixed = TRUE)
+  x <- sub("2004-2022", "2004\u20132022", x, fixed = TRUE)
+  x
+}
+fig7 <- plots$fig7 +
+  facet_wrap(~ configuration, ncol = 2,
+             labeller = labeller(configuration = config_label)) +
+  scale_x_discrete(labels = model_labels) +
+  labs(title = NULL, subtitle = NULL) +
+  theme(
+    axis.text.y   = element_text(colour = "black", face = "bold", lineheight = 0.85),
+    axis.text.x   = element_text(colour = "black"),
+    strip.text    = element_text(face = "bold", size = base_size),
+    panel.spacing = unit(3, "mm")
+  )
+fig7 <- fig7 & paper_theme
+fig7
+save_paper_fig(fig7, "Fig7", height_mm = 140)
+
+# Caption:
+# Figure 5. Predictive performance (test-set mean absolute error, MAE, in percentage
+# points) of the three models (random forest, gradient boosting and LASSO) for each data
+# configuration, using monthly climate variables (left) or seasonal aggregates (right).
+# The dashed red vertical line is the baseline MAE (overall mean prediction); bars
+# shorter than the baseline indicate better predictive performance.
+
+# --- Fig 8: combined variable importance, monthly (left) / seasonal (right) --
+# Same text style as Fig 7: black labels, bold 8 pt, bold panel titles; title removed.
+fig8 <- plots$fig8 +
+  labs(title = NULL) +
+  theme(
+    axis.text.y   = element_text(colour = "black", face = "bold", size = base_size),
+    axis.text.x   = element_text(colour = "black"),
+    strip.text    = element_text(face = "bold", size = base_size),
+    panel.spacing = unit(4, "mm")
+  )
+fig8 <- fig8 & paper_theme
+fig8
+save_paper_fig(fig8, "Fig8", height_mm = 90)
+
+# Caption:
+# Figure 6. Combined variable importance (0-1 scale) of the ten most important variables,
+# computed across all data configurations and models (random forest, gradient boosting,
+# LASSO) and weighted by model performance, for the monthly (left) and seasonal (right)
+# climate datasets.
+
+# --- Fig 9a: regional climate vs esca incidence (region x year pairs) --------
+# Patchwork object (P/ET panel + VPD panel, collected legend): title removed.
+fig9 <- plots$fig9a +
+  plot_annotation(title = NULL, tag_levels = "a") &
+  guides(linewidth = "none",                       # no legend for the smooth median (see caption)
+         colour = guide_legend(nrow = 1)) &       # region legend on a single row
+  paper_theme &
+  theme(
+    axis.text          = element_text(colour = "black"),
+    legend.position    = "bottom",                 # region legend below the plots
+    legend.title       = element_text(face = "bold"),
+    legend.key.size    = unit(3.5, "mm"),
+    legend.box.spacing = unit(1, "mm")
+  )
+fig9
+save_paper_fig(fig9, "Fig9", height_mm = 78)
+
+# Caption:
+# Figure 7. Relationship between esca incidence and climate for each region and year.
+# Each point is a region-year pair; the y axis is the median incidence (% of vine stocks
+# with foliar symptoms or apoplexy) across the plots of the region. (a) Mean seasonal
+# precipitation to evapotranspiration (P/ET) ratio, September-August; (b) median seasonal
+# vapour pressure deficit (VPD, kPa). Colours indicate the region; the black line is a
+# smooth median (quantile GAM, tau = 0.5) fitted to all points. Esca incidence increases
+# with the P/ET ratio and decreases with VPD.
+```
+
+---
 
 ---
 
