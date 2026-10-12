@@ -156,6 +156,30 @@ If absent, map chunks in `Esca_Epidemiology.Rmd` fall back gracefully and the re
 
 ---
 
+## Compiling the paper (LaTeX)
+
+The manuscript lives in `paper_tex/`:
+
+- `main.tex` – preamble; each section is pulled in with `\input{sections/...}`
+- `sections/` – one file per section (abstract, introduction, methods, results, discussion, acknowledgements, supplementary)
+- `Esca_Epidemiology.bib` – bibliography database (BibTeX, `natbib` + `plainnat`)
+- figures are read from `plots/paper/*.pdf` (produced by `fine_tune_figures.R`), so keep `paper_tex/` and `plots/` side by side
+
+Compile from inside `paper_tex/` (BibTeX, **not** biber):
+
+```bash
+cd paper_tex
+pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex
+```
+
+or, equivalently, `latexmk -pdf main.tex`. Both give `main.pdf`.
+
+If the bibliography looks wrong (missing references, `I found no \citation commands`), check that `main.tex` loads
+`\usepackage[round]{natbib}` and ends with `\bibliographystyle{plainnat}` / `\bibliography{Esca_Epidemiology}`
+(not `biblatex` / `\printbibliography`), then clear stale files with `latexmk -C` and rebuild.
+
+---
+
 ## Notes
 
 - The seasonal main-varieties output folder is named `main_varieties_seasonnal` (legacy typo preserved for consistency).
