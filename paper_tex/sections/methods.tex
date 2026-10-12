@@ -1,0 +1,154 @@
+\section{Materials and methods}\label{sec:methods}
+
+The data collection was not initially designed as a long-term monitoring program, nor was the sampling scheme intended to provide comprehensive coverage of all viticultural regions in Western Switzerland or to follow a fully randomized, reproducible sampling design. Some of the variables collected were not used in the analyses, essentially because over the years they were found to be unreliable or irrelevant (and are thus missing for the final years): an estimated age category and the vine~training system. From a statistical point of view, the dataset is therefore a convenience sample rather than a well-designed survey.
+
+\subsection{Dataset}
+
+Vineyards were selected within six viticultural areas: La Côte, Lavaux, Chablais, Nord-Vaudois, Valais and, from 2012 onward, Neuchâtel. These regions encompass contrasting climatic conditions, particularly with respect to rainfall patterns. In 2001, a total of 66 parcels were surveyed on La Côte, 15 in Lavaux, 4 in the Nord Vaudois and 2 in Valais. Additional vineyards were added in 2004 to reach 21 parcels in Valais, and from 2006 the sampling was homogenized across regions (31 parcels on La Côte, 12 in Lavaux, 12 in Chablais and 17 in Valais). In 2012, nine Neuchâtel vineyards were integrated into the network, along with seven additional chasselas plots in Valais to distinguish cultivar effects from local environmental factors. Plot coordinates were systematically recorded. When a vineyard was uprooted or showed excessive missing vines, it was replaced by another nearby plot of the same cultivar. Over the full monitoring period, 31 plots remained continuously in the survey (15 from 2004 at least, 16 from 2012), including 24 planted with Chasselas.
+
+Each year, symptom incidence was carried out between late August and mid-September, when seasonal foliar symptoms are fully expressed. Experienced observers assessed four groups of 100 vines per plot (400 vines in total) for esca incidence. The following categories were recorded: foliar symptoms of slow esca, apoplectic form, eutypa dieback, and vines missing, recently replaced (1--2 years), or not budded. Disease incidence is quantified as the percentage of vine stocks showing foliar symptoms or apoplexy within each plot. We use the sum of the percentages of plants affected by symptoms and those that suffered apoplexy as the response variable for all analyses.
+
+From 2004 onward, surveys were repeated biennially, and annually from 2014 until monitoring ended in 2022.
+
+\subsubsection{Stable plots}
+
+A subset of ``stable plots'' --- plots that were consistently monitored over multiple years --- was identified to allow longitudinal analyses controlling for site-specific effects. Note that this subset cannot be inferred from the identifier of the plot alone. Indeed, the plot identifier indicates a location or a domain rather that a specific plot. Two stability groups are defined:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{2004--2022}: plots present at every observation campaign from 2004 to 2022 (sometimes even from 2001, but we restricted to 2004 to ensure a minimum number of complete observations). There are 15 plots in this group.
+\item
+  \textbf{2012--2022}: plots present from 2012 to 2022 (larger subset with annual observations). There are 16 plots in this (in addition to the previous group).
+\end{itemize}
+
+These subsets enable a within-plot temporal comparison, but the number of plots of those categories is rather limited.
+
+\subsection{Covariates}
+
+In addition to the response variable, a set of covariates was collected or derived for each plot-year observation. Some covariates were directly measured in the field (location, variety etc.), while others were obtained from external sources. We essentially focused on variables that could potentially influence Esca expression, namely meteorological data and soil water reserve. Many climatical variables are reported in the literature as potential drivers of Esca expression, see e.g. Etienne et al. (2026) for an account. We did include all the ones that were available, but we stress the fact that those variables are not always faithfully representative of the microclimate of the plot, essentially because of the distance between the plot and the weather station. Over the years, the number of weather stations has increased, and the distance between the plots and their nearest station has decreased, due to the expansion of the \href{https://agrometeo.ch/}{Agrometeo network}.
+
+\subsubsection{Meteorological data}
+
+Climate data was obtained from two complementary networks:
+
+\begin{itemize}
+\item
+  \textbf{MeteoSwiss} (\href{https://www.meteoswiss.admin.ch/}{Federal Office of Meteorology and Climatology}): 8 stations relevant for the study area, providing complete temporal coverage from 2001 to 2022. Measured variables include temperature, atmospheric pressure, precipitation, global radiation, relative humidity, and evapotranspiration.
+\item
+  \textbf{Agrometeo} (\href{https://www.agrometeo.ch/}{Agroscope agrometeorological network}): approximately 40 stations, generally located closer to vineyard plots. The deployment of the network started in 2003 and additional stations have been added over the time. The same variables are available as MeteoSwiss, excluding atmospheric pressure and global radiation (for some of the stations).
+\end{itemize}
+
+\textbf{Merging strategy}: A ``Agrometeo-first with MeteoSwiss fallback'' approach was adopted. For each plot-year combination, Agrometeo data is used if the nearest station is within 30 km and data is available for that year; otherwise, MeteoSwiss data from the closest station is used. Note that we have not considered MeteoSwiss stations that are higher than the highest Agrometeo station even if they were closer, as they are not representative of the vineyard climate.
+
+\textbf{Temporal aggregation}: All climate variables are aggregated monthly over the growing season (March--August; since the observations have been made in late August in the vast majority of cases, it is irrelevant to include climatic variables later), yielding 6 monthly values per variable type (approximately 36--56 climate predictors in total depending on available variables). Additionally, seasonal aggregates (denoted by \texttt{SeasXX}) summarize the entire March--August period into a single value per variable.
+
+\textbf{Vapour Pressure Deficit (VPD)}: It is computed from hourly temperature (\emph{T}) and relative humidity (RH, in \%) data using the Magnus formula \citep{alduchov_improved_1996}:
+
+\[\text{VPD} = 0.611 \cdot \exp\left( \frac{17.27 \cdot T}{237.3 + T} \right) \cdot \left( 1 - \frac{RH}{100} \right),\]
+
+then aggregated to daily values as the maximum daily VPD and finally aggregated to monthly values as the mean of the maximum daily VPD over each month.
+
+\subsubsection{Other covariates}
+
+The non-meteorological covariates that are included in the dataset are summarized in \cref{tab:covariates}.
+
+\begin{table}[tbp]
+\centering
+\caption{Some of the collected covariates.}\label{tab:covariates}
+\begin{tabular}{@{}l l p{0.58\textwidth}@{}}
+\toprule
+\textbf{Variable} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\texttt{variety} & Categorical & Grape variety (chasselas, gamay, pinot noir, pinot gris, sauvignon blanc, and minor varieties). \\
+\texttt{RU\_nb} & Numeric & Available water reserve from soil surveys (mm).  Only available for 25 stable plots. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Regarding the covariate \texttt{RU\_nb} (available water reserve), it is only available for a limited number of plots. The RU is an estimate based on the soil survey and should therefore be interpreted with caution.
+
+\subsection{FORD algorithm}
+
+FORD (\emph{Feature Ordering by integrated} \(R^{2}\) \emph{Dependence}, \citealp{azadkia_new_2025}) is a variable selection algorithm. It is based on a measure of the strength of relationship between a set of predictors and the response variable using the so-called integrated \(R^{2}\). This dependence measure does not rely on any specific model or distributional assumptions. It can capture non-linear and non-monotonic relationships, which is in strong contrast with traditional correlation measures. The FORD algorithm adds one variable at a time to the ``acting set'\,' (the set of currently selected variables), and at each step determines which variable has the strongest measure of association with the response variable. The procedure stops when no remaining variable shows an increase in the association between the active set and the response.
+
+\subsection{Machine learning predictive study}
+
+Since the underlying causal mechanism of the disease remains poorly understood, it seemed more reasonable to us to use models that were as flexible as possible, at the potential cost of some interpretability. Thus, we chose a predictive approach rather than an inferential one \citep{breiman_statistical_2001}. Another reason to choose a predictive approach relates to the sampling design, which was not designed to guide a specific model, as might be the case in controlled trials see e.g. \citep{meier_anova_2022}.
+
+\subsubsection{Data splitting, baseline, metrics and hyperparameter selection}
+
+Using a conventional practice in machine learning \citep{hastie_elements_2009}, the dataset was split into 75\% training / 25\% test set and stratified by the response variable (total incidence). The stratification ensures that the distribution of the response variable is comparable in both sets. 10-fold cross-validation (single repeat) was applied on the training set for hyperparameter tuning when needed.
+
+The means of the incidence by region and year was used as the baseline prediction for all test observations. This represents the simplest possible model, one that predicts the same value regardless of covariates (except for region and year). We used Mean Absolute Error (MAE), i.e. the average difference in absolute value, as the primary metric and the relative change of the MAE with respect to the baseline (in percent; negative values indicate an improvement over the baseline) is defined as
+
+\[
+\Delta\mathrm{MAE} = 100 \times \frac{\mathrm{MAE}_{\mathrm{model}} - \mathrm{MAE}_{\mathrm{baseline}}}{\mathrm{MAE}_{\mathrm{baseline}}}
+\]
+
+\subsubsection{Algorithms and methods}
+
+The pipeline was run across multiple data subsets to assess its sensitivity to different settings and plot conditions. The tested configurations are reported in Table \ref{tab:configs}.
+
+\begin{table}[tbp]
+\centering
+\caption{Definition of the different configurations used by the predictive models.}\label{tab:configs}
+\begin{tabular}{@{}l l@{}}
+\toprule
+\textbf{Configuration} & \textbf{Description} \\
+\midrule
+Chasselas Only & Only chasselas variety \\
+Exclude Sauvignon Blanc & All varieties except sauvignon blanc \\
+Stable Chasselas (2004--2022) & Chasselas in stable plots \\
+Main Varieties & Chasselas, gamay, pinot noir, pinot gris \\
++ Seasonal variants & Same subsets with seasonal aggregate features only \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each configuration was run with both monthly and seasonal aggregation modes (8 configurations total).
+
+On each configuration, three machine learning algorithms were trained and compared:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Random Forest} \citep{breiman_random_2001}\textbf{;} \texttt{ranger} engine (\citealp{wright_ranger_2017})
+\item
+  \textbf{Extreme Gradient Boosting} \citep{chen_xgboost_2016}\textbf{;} \texttt{xgboost} engine (\citealp{chen_tianqi_xgboost_2026}
+\item
+  \textbf{LASSO regression} \citep{tibshirani_regression_1996}; \texttt{glmnet} engine (\citealp{friedman_regularization_2010}
+\end{itemize}
+
+Each of those algorithms comes with their own variable importance metric, which quantifies the contribution to each of the variables to the estimate. To obtain a unified ranking across models and configuration using different importance scales, the following aggregation was applied:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Rescale} each model's importance to {[}0, 1{]} by dividing by the within-model per configuration maximum
+\item
+  \textbf{Weight} each model proportionally to its MAE improvement over baseline:\\
+  \(w_{m} = \max\bigl(0,\,(\text{MAE}_{\text{baseline}} - \text{MAE}_{m})/\text{MAE}_{\text{baseline}})\)
+\item
+  \textbf{Combine} via weighted average: \(\text{Combined}_{i} = \frac{\sum_{m}^{}w_{m}\, s_{i}^{m}}{\sum_{m}^{}w_{m}}\)
+\end{enumerate}
+
+Thus, the weight assigned to a model for a given configuration in the calculation of overall importance is proportional to its predictive power (relative to the baseline). Models that do not beat the baseline receive zero weight.
+
+\subsection{Regional aggregation, differences and hydrology}
+
+We computed two climate indicators for each of the six study regions:
+
+\begin{itemize}
+\item
+  \textbf{P/ET ratio} (precipitation/evapotranspiration) ratio --- the mean annual ratio of precipitation (P) to FAO reference evapotranspiration (ET), computed from MeteoSwiss data (when available) at one representative station per region. The ratio is computed over the 12 months preceding the observations (September of previous year to August) and is a unitless measure of the water balance
+\item
+  \textbf{Seasonal VPD} --- the median seasonal VPD (mean of maximum daily VPD, March--August) across all plot-year observations within each region.
+\end{itemize}
+
+The P/ET ratio is scale-invariant and thus allows comparison of regions with different rainfall patterns. It is a sensible indicator of the hydrometry of a given region. The seasonal VPD was already chosen as a proxy for the water stress experienced by the plant. Both indicators were compared to the median Esca incidence (Symptoms + Apoplexy, \%) by region and year. Note that these two indicators are highly correlated and thus essentially convey similar information. To compute the P/ET ratio, we used the following weather stations of the MeteoSwiss network: Aigle (Chablais), Changins (La Côte), Pully (Lavaux), Neuchâtel (Neuchâtel), Mathod (Nord Vaudois) and Sion (Valais). Note that Mathod has a few missing data.
+
+\subsection{Codes, data availability and reproducibility}
+
+All the codes to run the analyzes are made available on github, while the codes that were used to download, organize and preprocess the meteodata are only available on demand, since for some of them, it requires access to the API of Agrometeo. The maps are also only available on demand because they rely on external shapefiles. The data set itself is published on \href{https://doi.org/10.5281/zenodo.21704547}{Zenodo} \citep{fabre_esca_2026}.

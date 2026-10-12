@@ -1,0 +1,85 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------------------------------------------------------------- encoding & fonts
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[british]{babel}
+\usepackage{microtype}
+
+% ---------------------------------------------------------------- page layout
+% 2.54 cm margins on A4 -> text width 159.2 mm (the width the figures were sized for)
+\usepackage[a4paper,margin=2.54cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6\baselineskip}
+
+% ---------------------------------------------------------------- maths, tables, figures
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{graphicx}
+\graphicspath{{../plots/paper/}}   % figures: PDF files produced by fine_tune_figures.R
+\usepackage[font=small,labelfont=bf,labelsep=period]{caption}
+\usepackage{enumitem}
+\setlist{nosep}
+\providecommand{\tightlist}{}   % emitted by pandoc inside lists
+
+% ---------------------------------------------------------------- authors
+\usepackage{authblk}
+\renewcommand\Authfont{\normalsize}
+\renewcommand\Affilfont{\small}
+
+% ---------------------------------------------------------------- bibliography
+% natbib + BibTeX: \citep{} (Author, year), \citet{} (Author (year)), \citealp{} (no parentheses)
+\usepackage[round]{natbib}
+
+% ---------------------------------------------------------------- hyperlinks (modern palette)
+\usepackage{xcolor}
+\definecolor{linkblue}{HTML}{2563EB}   % internal links: figures, tables, sections
+\definecolor{citeteal}{HTML}{0F766E}   % citations
+\definecolor{urlviolet}{HTML}{7C3AED}  % external URLs and DOIs
+\usepackage[colorlinks=true,linkcolor=linkblue,citecolor=citeteal,urlcolor=magenta,
+            linktoc=all,bookmarksnumbered=true,
+            pdfauthor={Wilhelm, Monod, Fabre, Viret, Zufferey, Gindro, Dubuis},
+            pdftitle={Long-Term Dynamics of Esca Disease in Western Switzerland},
+            pdfkeywords={esca disease, predictive modelling, FORD algorithm}]{hyperref}
+\usepackage[capitalise,nameinlink]{cleveref}   % \cref{fig:map} -> "Figure 1"
+\crefname{figure}{Figure}{Figures}
+\crefname{table}{Table}{Tables}
+
+% ---------------------------------------------------------------- title block
+\title{Long-Term Dynamics of Esca Disease in Western Switzerland}
+\author[1,*]{Matthieu Wilhelm}
+\author[1,*]{Vinciane Monod}
+\author[1]{Anne-Lise Fabre}
+\author[2]{Olivier Viret}
+\author[3]{Vivian Zufferey}
+\author[1]{Katia Gindro}
+\author[1,**]{Pierre-Henri Dubuis}
+\affil[1]{Agroscope, Mycology, Switzerland}
+\affil[2]{General Direction of Agriculture, Viticulture and Veterinary Affairs, Canton de Vaud, Switzerland}
+\affil[3]{Agroscope, Viticulture, Switzerland}
+\date{}
+
+\begin{document}
+
+% front matter: \maketitle + abstract + keywords
+\input{sections/abstract}
+
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/acknowledgements}
+
+\clearpage
+\addcontentsline{toc}{section}{Bibliography}
+\bibliographystyle{plainnat}
+\bibliography{Esca_Epidemiology}
+
+\input{sections/supplementary}
+
+\end{document}
