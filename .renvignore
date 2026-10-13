@@ -1,0 +1,6 @@
+# Not part of the reproducible analysis: excluded from renv dependency scanning
+archive_scripts/
+results/
+plots/
+paper_tex/
+.Rproj.user/

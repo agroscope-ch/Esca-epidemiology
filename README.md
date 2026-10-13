@@ -15,6 +15,27 @@ https://zenodo.org/records/21704548
 
 and that a description of the variables is available both on Zenodo and in the file [description dataset.md](description_dataset.md)
 
+### 0. One-time setup (package environment)
+
+The exact package versions used for the paper are recorded in `renv.lock` (R 4.6.1).
+Open `esca_epidemiologie_paper.Rproj` in RStudio (or start R in the repository root), which
+automatically activates the project's private library via `renv`, then run **once**:
+
+```r
+install.packages("renv")   # only if renv is not yet available; it is bootstrapped automatically otherwise
+renv::restore()            # answer "y" when asked; installs all packages at the locked versions
+```
+
+Packages are installed into the project (`renv/library/`), not into your global R library, so
+nothing else on your machine is affected. This can take 10-30 minutes the first time. Some packages
+(`sf`, `xgboost`, `lightgbm`) may need system libraries on Linux (e.g. GDAL/GEOS/PROJ); on Windows/macOS
+binaries are used and nothing else is required.
+
+If `library(vip)` (or any other package) is reported as unavailable, `renv::restore()` has not been
+run, or was interrupted: run `renv::status()` to see what is missing, then `renv::restore()` again.
+
+### 1-3. Run the analysis
+
 Run the three steps below from the repository root in an R session:
 
 ```r
@@ -151,8 +172,20 @@ If absent, map chunks in `Esca_Epidemiology.Rmd` fall back gracefully and the re
 
 ## R Package Dependencies
 
-- **Core**: `tidymodels`, `tidyverse`, `readxl`, `lubridate`, `xgboost`, `ranger`, `glmnet`, `vip`, `finetune`, `doParallel`
-- **Utilities**: `corrplot`, `probably`, `httr`, `data.table`
+Dependencies are managed with [`renv`](https://rstudio.github.io/renv/):
+
+- `renv.lock` – exact versions of all packages (committed; do not edit by hand)
+- `renv/`, `.Rprofile` – activation scripts (committed); `renv/library/` is local and git-ignored
+- `renv_engine_dependencies.R` – declares packages used only indirectly as tidymodels engines (`ranger`, `glmnet`) so that `renv` records them; it is never executed
+- `.renvignore` – folders that are not scanned for dependencies (archived scripts, outputs, LaTeX)
+
+Main packages: `tidymodels`, `tidyverse`, `readxl`, `lubridate`, `xgboost`, `ranger`, `glmnet`, `lightgbm`, `vip`, `finetune`, `doParallel`,
+`FORD`, `qgam`, `plotly`, `patchwork`, `kableExtra`, `sf`, `corrplot`, `probably`.
+
+The optional `tabpfn` model (GitHub-only, needs Python) is deliberately **not** part of the lockfile; the pipeline
+skips it when the package is absent.
+
+**Maintainers:** after adding or upgrading a package, run `renv::snapshot()` and commit the updated `renv.lock`.
 
 ---
 
@@ -163,7 +196,7 @@ The manuscript lives in `paper_tex/`:
 - `main.tex` – preamble; each section is pulled in with `\input{sections/...}`
 - `sections/` – one file per section (abstract, introduction, methods, results, discussion, acknowledgements, supplementary)
 - `Esca_Epidemiology.bib` – bibliography database (BibTeX, `natbib` + `plainnat`)
-- figures are read from `plots/paper/*.pdf` (produced by `fine_tune_figures.R`), so keep `paper_tex/` and `plots/` side by side
+- figures are read from `plots/paper/*.pdf` (produced by the `paper_figures` chunk of `Esca_Epidemiology.Rmd`), so keep `paper_tex/` and `plots/` side by side
 
 Compile from inside `paper_tex/` (BibTeX, **not** biber):
 
